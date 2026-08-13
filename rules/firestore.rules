@@ -1,0 +1,152 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore — esta é a camada que REALMENTE impede
+// alguém de ver ou mexer no que não deveria, já que o site é 100% estático
+// (GitHub Pages) e não existe um servidor por trás para checar permissões.
+// Esconder um botão ou menu no HTML/CSS é só conforto de interface: quem
+// garante de verdade as regras abaixo é o próprio banco de dados do Google.
+//
+// Perfis (guardados em usuarios/{uid}.perfil):
+//   - super_admin: acesso total, incluindo Prestadores PJ e cadastro de usuários.
+//   - admin:       acesso total ao RH, EXCETO Prestadores PJ e cadastro de usuários.
+//   - funcionario: só lê/lança dados do próprio colaboradorId vinculado.
+//
+// IMPORTANTE (passo manual de instalação): a primeira conta (a sua, Super
+// Admin) precisa ser criada uma única vez direto no Console do Firebase —
+// veja o passo a passo em docs/CONFIGURAR_FIREBASE.md — porque estas regras
+// só deixam CRIAR contas quem já é Super Admin (e a primeira ainda não existe).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaLogado() {
+      return request.auth != null;
+    }
+
+    function meuPerfilDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function estaAtivo() {
+      return estaLogado() && meuPerfilDoc().data.ativo == true;
+    }
+
+    function meuPerfil() {
+      return meuPerfilDoc().data.perfil;
+    }
+
+    function meuColaboradorId() {
+      return meuPerfilDoc().data.colaboradorId;
+    }
+
+    function ehSuperAdmin() {
+      return estaAtivo() && meuPerfil() == 'super_admin';
+    }
+
+    function ehAdminOuSuperAdmin() {
+      return estaAtivo() && (meuPerfil() == 'admin' || meuPerfil() == 'super_admin');
+    }
+
+    // ---------------- usuarios (contas do sistema / controle de acesso) ----------------
+    // Qualquer pessoa logada pode ler o PRÓPRIO documento (é assim que o
+    // site descobre o perfil dela ao entrar). Só Super Admin lista/edita/
+    // cria/exclui contas de outras pessoas — COM UMA EXCEÇÃO: a própria
+    // pessoa pode atualizar SÓ o campo senhaProvisoria do próprio
+    // documento (nenhum outro campo), pra concluir a troca de senha
+    // obrigatória do primeiro acesso sem precisar ser Super Admin.
+    match /usuarios/{uid} {
+      allow get: if estaLogado() && (request.auth.uid == uid || ehSuperAdmin());
+      allow list: if ehSuperAdmin();
+      allow create, delete: if ehSuperAdmin();
+      allow update: if ehSuperAdmin() || (
+        estaLogado() && request.auth.uid == uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['senhaProvisoria'])
+      );
+    }
+
+    // ---------------- colaboradores (cadastro de RH) ----------------
+    // Admin/RH ainda LÊ os colaboradores (precisa disso pro Painel, Férias,
+    // Ajustes e Relatório) mas só Super Admin pode criar/editar/excluir o
+    // cadastro — a aba "Colaboradores" em si é restrita a Super Admin.
+    match /colaboradores/{colabId} {
+      allow get: if ehAdminOuSuperAdmin() || (estaAtivo() && meuColaboradorId() == colabId);
+      allow list: if ehAdminOuSuperAdmin();
+      allow create, update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- registros de ponto ----------------
+    // Funcionário só enxerga e só lança ponto com o próprio colaboradorId
+    // (o site sempre filtra a consulta por colaboradorId — sem esse filtro
+    // o Firestore recusa a leitura, é assim que a regra é garantida).
+    // "read" cobre get E list com a MESMA condição por documento — é isso
+    // que impede um funcionário de fazer uma consulta sem filtro e receber
+    // registros de outras pessoas: o Firestore só libera a consulta se ela
+    // estiver estruturalmente restrita ao que a regra permite (por isso o
+    // site sempre usa .where("colaboradorId","==", meuColaboradorId) ao
+    // consultar como funcionário — veja js/db.js).
+    // Admin/RH ainda LÊ os registros (precisa disso pro saldo do Painel e do
+    // Relatório), mas só Super Admin pode lançar/editar/excluir ponto de
+    // outra pessoa — as abas "Registrar ponto" e "Histórico" ficam
+    // restritas a Super Admin; funcionário continua lançando o PRÓPRIO ponto.
+    match /registros/{regId} {
+      allow read: if ehAdminOuSuperAdmin() || (estaAtivo() && resource.data.colaboradorId == meuColaboradorId());
+      allow create: if ehSuperAdmin() || (estaAtivo() && request.resource.data.colaboradorId == meuColaboradorId());
+      allow update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- ajustes de banco de horas (lançados só por RH) ----------------
+    match /ajustes/{ajId} {
+      allow read: if ehAdminOuSuperAdmin() || (estaAtivo() && resource.data.colaboradorId == meuColaboradorId());
+      allow create, update, delete: if ehAdminOuSuperAdmin();
+    }
+
+    // ---------------- férias (períodos gozados) ----------------
+    match /feriasGozos/{gozoId} {
+      allow read: if ehAdminOuSuperAdmin() || (estaAtivo() && resource.data.colaboradorId == meuColaboradorId());
+      allow create, update, delete: if ehAdminOuSuperAdmin();
+    }
+
+    // ---------------- rescisões (histórico de cálculos de desligamento) ----------------
+    // Aba "Rescisão" (CLT) restrita a Super Admin — Admin/RH não calcula
+    // nem vê rescisões de outros; funcionário ainda vê a própria, se existir.
+    match /rescisoes/{rescId} {
+      allow read: if ehSuperAdmin() || (estaAtivo() && resource.data.colaboradorId == meuColaboradorId());
+      allow create, update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- ajustes salariais (histórico de mudanças de salário do CLT) ----------------
+    // Vive dentro da aba "Colaboradores", que já é restrita a Super Admin —
+    // mesma restrição aqui.
+    match /ajustesSalariais/{id} {
+      allow get, list, create, update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- ajustes de honorário PJ (histórico de mudanças do valor mensal) ----------------
+    // Mesma restrição do módulo PJ.
+    match /ajustesHonorarioPJ/{id} {
+      allow get, list, create, update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- Prestadores PJ — SOMENTE Super Admin, sem exceção ----------------
+    // Nem "admin" comum consegue ler isso — é a restrição pedida
+    // especificamente para este módulo.
+    match /prestadoresPJ/{pjId} {
+      allow get, list, create, update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- períodos de indisponibilidade de Prestadores PJ ----------------
+    // Mesma restrição do módulo PJ — não é "férias CLT" (PJ não tem esse
+    // direito), é só um registro de agenda de quando o prestador não vai
+    // estar disponível, para você conseguir se organizar.
+    match /pjPeriodos/{periodoId} {
+      allow get, list, create, update, delete: if ehSuperAdmin();
+    }
+
+    // ---------------- distratos de Prestadores PJ (histórico de encerramentos) ----------------
+    // Mesma restrição do módulo PJ. NÃO é rescisão CLT — não calcula 13º,
+    // férias+1/3, aviso prévio proporcional nem multa de FGTS.
+    match /distratosPJ/{distratoId} {
+      allow get, list, create, update, delete: if ehSuperAdmin();
+    }
+  }
+}
