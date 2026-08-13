@@ -18,6 +18,11 @@ var PERFIL_ADMIN = "admin";
 var PERFIL_FUNCIONARIO = "funcionario";
 var LIMITE_CONTAS = 3;
 
+// Toda conta nova começa com essa senha — a pessoa é obrigada a trocar por
+// uma senha só dela no primeiro acesso (ver senhaProvisoria abaixo e a
+// tela #trocarSenhaScreen em index.html).
+var SENHA_PADRAO_INICIAL = "Parlamento2026";
+
 var usuarioAtual = null; // { uid, nome, email, perfil, colaboradorId, ativo }
 var authProntoCallbacks = [];
 var authJaResolveu = false;
@@ -49,6 +54,7 @@ function carregarPerfilUsuario(firebaseUser) {
       perfil: dados.perfil,
       colaboradorId: dados.colaboradorId || null,
       ativo: true,
+      senhaProvisoria: !!dados.senhaProvisoria,
     };
   });
 }
@@ -75,7 +81,12 @@ function fazerLogout() {
  * Firebase ("Secondary"), que é a forma recomendada de criar contas de
  * outras pessoas a partir do próprio navegador sem precisar de um backend.
  *
- * dados: { nome, email, senha, perfil, colaboradorId }
+ * A senha sempre começa como SENHA_PADRAO_INICIAL — quem cadastra não
+ * escolhe/digita senha nenhuma. A conta nasce marcada com
+ * senhaProvisoria=true, e a pessoa é obrigada a trocar por uma senha só
+ * dela no primeiro login (tela #trocarSenhaScreen, ver app.js).
+ *
+ * dados: { nome, email, perfil, colaboradorId }
  */
 function criarUsuario(dados) {
   var secondaryApp = firebase.apps.filter(function (a) { return a.name === "Secondary"; })[0];
@@ -83,7 +94,7 @@ function criarUsuario(dados) {
     secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
   }
   var secondaryAuth = secondaryApp.auth();
-  return secondaryAuth.createUserWithEmailAndPassword(dados.email, dados.senha)
+  return secondaryAuth.createUserWithEmailAndPassword(dados.email, SENHA_PADRAO_INICIAL)
     .then(function (cred) {
       var novoUid = cred.user.uid;
       return secondaryAuth.signOut().then(function () {
@@ -93,11 +104,27 @@ function criarUsuario(dados) {
           perfil: dados.perfil,
           colaboradorId: dados.colaboradorId || null,
           ativo: true,
+          senhaProvisoria: true,
           criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
           criadoPor: usuarioAtual ? usuarioAtual.uid : null,
         });
       }).then(function () { return novoUid; });
     });
+}
+
+/**
+ * Troca a senha da conta atualmente logada (usada na tela de primeiro
+ * acesso) e apaga a marca de "senha provisória" no Firestore. Se a sessão
+ * for antiga demais, o Firebase pode pedir login de novo
+ * (auth/requires-recent-login) — como isso roda logo após o login inicial,
+ * na prática não deve acontecer.
+ */
+function trocarSenhaObrigatoria(novaSenha) {
+  return auth.currentUser.updatePassword(novaSenha).then(function () {
+    return db.collection("usuarios").doc(usuarioAtual.uid).update({ senhaProvisoria: false });
+  }).then(function () {
+    if (usuarioAtual) usuarioAtual.senhaProvisoria = false;
+  });
 }
 
 /** Lista de usuários ativos+inativos, para a tela de gestão (Super Admin). */

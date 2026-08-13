@@ -33,10 +33,17 @@ function el(id) { return document.getElementById(id); }
 function mostrarTela(nome) {
   el("loginScreen").style.display = nome === "login" ? "flex" : "none";
   el("semAcessoScreen").style.display = nome === "semAcesso" ? "flex" : "none";
+  el("trocarSenhaScreen").style.display = nome === "trocarSenha" ? "flex" : "none";
   el("appShell").style.display = nome === "app" ? "block" : "none";
 }
 
 var appIniciado = false;
+
+function entrarNoApp() {
+  mostrarTela("app");
+  aplicarRBACNaInterface();
+  if (!appIniciado) { appIniciado = true; iniciarApp(); }
+}
 
 onAuthPronto(function (resultado) {
   if (!resultado) { mostrarTela("login"); appIniciado = false; return; }
@@ -47,9 +54,33 @@ onAuthPronto(function (resultado) {
     mostrarTela("semAcesso");
     return;
   }
-  mostrarTela("app");
-  aplicarRBACNaInterface();
-  if (!appIniciado) { appIniciado = true; iniciarApp(); }
+  if (resultado.senhaProvisoria) { mostrarTela("trocarSenha"); return; }
+  entrarNoApp();
+});
+
+el("trocarSenhaForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  var nova = el("novaSenha").value;
+  var confirmar = el("confirmarNovaSenha").value;
+  var erroBox = el("trocarSenhaError");
+  var btn = el("btnTrocarSenha");
+  if (nova.length < 6) { erroBox.hidden = false; erroBox.textContent = "A senha precisa ter pelo menos 6 caracteres."; return; }
+  if (nova !== confirmar) { erroBox.hidden = false; erroBox.textContent = "As senhas não coincidem."; return; }
+  erroBox.hidden = true;
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+  trocarSenhaObrigatoria(nova).then(function () {
+    showToast("Senha definida com sucesso.");
+    entrarNoApp();
+  }).catch(function (err) {
+    erroBox.hidden = false;
+    var msg = "Não foi possível trocar a senha: " + (err && err.message || "");
+    if (err && err.code === "auth/requires-recent-login") msg = "Por segurança, saia e entre de novo com a senha padrão antes de trocar.";
+    erroBox.textContent = msg;
+  }).finally(function () {
+    btn.disabled = false;
+    btn.textContent = "Definir nova senha";
+  });
 });
 
 el("loginForm").addEventListener("submit", function (e) {
@@ -1246,20 +1277,19 @@ el("usuarioForm").addEventListener("submit", function (e) {
   var dados = {
     nome: el("usrNome").value.trim(),
     email: el("usrEmail").value.trim(),
-    senha: el("usrSenha").value,
     perfil: el("usrPerfil").value,
     colaboradorId: el("usrPerfil").value === "funcionario" ? (el("usrColaborador").value || null) : null,
   };
-  if (!dados.nome || !dados.email || dados.senha.length < 6) {
+  if (!dados.nome || !dados.email) {
     el("usuarioFormError").hidden = false;
-    el("usuarioFormError").textContent = "Preencha nome, e-mail e uma senha com pelo menos 6 caracteres.";
+    el("usuarioFormError").textContent = "Preencha nome e e-mail.";
     return;
   }
   var btn = el("usuarioForm").querySelector("button[type=submit]");
   btn.disabled = true;
   criarUsuario(dados).then(function () {
     el("usuarioFormOk").hidden = false;
-    el("usuarioFormOk").textContent = "Conta criada. Avise " + dados.nome + " do e-mail e senha para o primeiro acesso.";
+    el("usuarioFormOk").textContent = "Conta criada. Avise " + dados.nome + " do e-mail e da senha padrão (Parlamento2026) — o sistema já vai pedir pra trocar no primeiro acesso.";
     el("usuarioForm").reset();
     el("usrPerfil").dispatchEvent(new Event("change"));
     carregarUsuarios();
@@ -1283,7 +1313,7 @@ function renderUsuarios() {
     row.className = "emp-admin-row";
     var vc = u.id === usuarioAtual.uid ? " (você)" : "";
     row.innerHTML =
-      '<div class="emp-admin-info"><strong>' + u.nome + vc + '</strong><span>' + u.email + ' · <span class="perfil-badge ' + u.perfil + '">' + PERFIL_LABEL[u.perfil] + '</span>' + (c ? ' · vinculado a ' + c.nome : '') + (u.ativo ? '' : ' · <strong style="color:var(--negative)">inativo</strong>') + '</span></div>' +
+      '<div class="emp-admin-info"><strong>' + u.nome + vc + '</strong><span>' + u.email + ' · <span class="perfil-badge ' + u.perfil + '">' + PERFIL_LABEL[u.perfil] + '</span>' + (c ? ' · vinculado a ' + c.nome : '') + (u.senhaProvisoria ? ' · <strong style="color:var(--warning, #b8860b)">ainda não trocou a senha</strong>' : '') + (u.ativo ? '' : ' · <strong style="color:var(--negative)">inativo</strong>') + '</span></div>' +
       '<div class="emp-admin-actions">' +
         (u.id !== usuarioAtual.uid ? '<button class="btn-ghost btn" data-action="toggle" data-id="' + u.id + '" data-ativo="' + u.ativo + '">' + (u.ativo ? "Inativar" : "Reativar") + '</button>' : '') +
       '</div>';
