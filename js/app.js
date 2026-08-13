@@ -17,6 +17,8 @@ var ajustes = [];
 var feriasGozos = [];
 var prestadoresPJ = [];
 var pjPeriodos = [];
+var ajustesSalariais = []; // histórico de mudanças de salário do CLT (colaborador em edição)
+var ajustesHonorarioPJ = []; // histórico de mudanças de honorário do PJ (prestador em edição)
 var listaUsuarios = [];
 
 var editandoRegistroId = null;
@@ -711,7 +713,68 @@ function limparFormularioEmp() {
     input.checked = true;
     input.closest(".weekday-chip").classList.add("checked");
   });
+  el("ajusteSalarialWrap").style.display = "none"; // só faz sentido registrar ajuste pra colaborador já existente
+  ajustesSalariais = [];
 }
+
+// ------------------------- Ajuste salarial (histórico) -------------------------
+function carregarAjustesSalariais(colaboradorId) {
+  el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="5" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
+  listarAjustesSalariais(colaboradorId).then(function (lista) {
+    ajustesSalariais = lista;
+    renderAjustesSalariais();
+  }).catch(function (err) {
+    console.error(err);
+    el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="5" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
+  });
+}
+function renderAjustesSalariais() {
+  var body = el("ajustesSalariaisBody");
+  body.innerHTML = "";
+  el("ajustesSalariaisVazio").hidden = ajustesSalariais.length !== 0;
+  ajustesSalariais.forEach(function (a) {
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td>' + formatDateBR(a.dataAjuste) + '</td>' +
+      '<td>' + formataMoeda(a.valorAnterior || 0) + '</td>' +
+      '<td>' + formataMoeda(a.valorNovo || 0) + '</td>' +
+      '<td>' + (a.motivo || '—') + '</td>' +
+      '<td><small style="color:var(--ink-faint);">' + (a.criadoPorNome || '—') + '</small></td>';
+    body.appendChild(tr);
+  });
+}
+el("ajusteSalarialForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  if (!editandoEmpId) return;
+  var colaborador = getColaborador(editandoEmpId);
+  if (!colaborador) return;
+  var dataAjuste = el("ajusteSalarialData").value;
+  var valorNovo = el("ajusteSalarialValor").value ? parseFloat(el("ajusteSalarialValor").value) : null;
+  var motivo = el("ajusteSalarialMotivo").value.trim();
+  if (!dataAjuste) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe a data do ajuste."; return; }
+  if (valorNovo === null || valorNovo <= 0) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe o novo salário."; return; }
+  el("ajusteSalarialFormError").hidden = true;
+
+  var registro = {
+    colaboradorId: editandoEmpId,
+    colaboradorNome: colaborador.nome,
+    dataAjuste: dataAjuste,
+    valorAnterior: colaborador.salarioBase || 0,
+    valorNovo: valorNovo,
+    motivo: motivo,
+  };
+  setSync("syncing");
+  salvarAjusteSalarial(registro)
+    .then(function () { return salvarColaborador({ id: editandoEmpId, salarioBase: valorNovo }); })
+    .then(function () {
+      setSync("ok"); showToast("Ajuste salarial registrado.");
+      el("ajusteSalarialForm").reset();
+      el("empSalario").value = valorNovo;
+      return carregarTudo(false);
+    })
+    .then(function () { carregarAjustesSalariais(editandoEmpId); })
+    .catch(function (err) { console.error(err); setSync("error"); showToast("Não foi possível registrar: " + (err && err.message || "")); });
+});
 el("empDias").querySelectorAll(".weekday-chip").forEach(function (chip) {
   chip.addEventListener("click", function (e) {
     var input = chip.querySelector("input");
@@ -780,6 +843,12 @@ function editarFuncionario(id) {
   el("empFormTitle").textContent = "Editando — " + c.nome;
   el("empCancelEdit").hidden = false;
   el("empFormError").hidden = true;
+  el("ajusteSalarialWrap").style.display = "block";
+  el("ajusteSalarialNome").textContent = c.nome;
+  el("ajusteSalarialForm").reset();
+  el("ajusteSalarialData").value = new Date().toISOString().slice(0, 10);
+  el("ajusteSalarialFormError").hidden = true;
+  carregarAjustesSalariais(id);
   window.scrollTo({ top: el("empForm").offsetTop - 20, behavior: "smooth" });
 }
 function excluirFuncionarioUI(id) {
@@ -1177,7 +1246,67 @@ function limparFormularioPj() {
   el("pjCancelEdit").hidden = true;
   el("pjFormError").hidden = true;
   el("pjStatus").value = "Ativo";
+  el("ajusteHonorarioWrap").style.display = "none"; // só faz sentido pra prestador já existente
+  ajustesHonorarioPJ = [];
 }
+
+// ------------------------- Ajuste de honorário PJ (histórico) -------------------------
+function carregarAjustesHonorarioPJ(prestadorId) {
+  el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="5" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
+  listarAjustesHonorarioPJ(prestadorId).then(function (lista) {
+    ajustesHonorarioPJ = lista;
+    renderAjustesHonorarioPJ();
+  }).catch(function (err) {
+    console.error(err);
+    el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="5" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
+  });
+}
+function renderAjustesHonorarioPJ() {
+  var body = el("ajustesHonorarioBody");
+  body.innerHTML = "";
+  el("ajustesHonorarioVazio").hidden = ajustesHonorarioPJ.length !== 0;
+  ajustesHonorarioPJ.forEach(function (a) {
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td>' + formatDateBR(a.dataAjuste) + '</td>' +
+      '<td>' + formataMoeda(a.valorAnterior || 0) + '</td>' +
+      '<td>' + formataMoeda(a.valorNovo || 0) + '</td>' +
+      '<td>' + (a.motivo || '—') + '</td>' +
+      '<td><small style="color:var(--ink-faint);">' + (a.criadoPorNome || '—') + '</small></td>';
+    body.appendChild(tr);
+  });
+}
+el("ajusteHonorarioForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  if (!editandoPjId) return;
+  var pj = prestadoresPJ.filter(function (p) { return p.id === editandoPjId; })[0];
+  if (!pj) return;
+  var dataAjuste = el("ajusteHonorarioData").value;
+  var valorNovo = el("ajusteHonorarioValor").value ? parseFloat(el("ajusteHonorarioValor").value) : null;
+  var motivo = el("ajusteHonorarioMotivo").value.trim();
+  if (!dataAjuste) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe a data do ajuste."; return; }
+  if (valorNovo === null || valorNovo <= 0) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe o novo honorário."; return; }
+  el("ajusteHonorarioFormError").hidden = true;
+
+  var registro = {
+    prestadorId: editandoPjId,
+    prestadorNome: pj.nomeRazaoSocial,
+    dataAjuste: dataAjuste,
+    valorAnterior: pj.valorHonorarioMensal || 0,
+    valorNovo: valorNovo,
+    motivo: motivo,
+  };
+  salvarAjusteHonorarioPJ(registro)
+    .then(function () { return salvarPrestadorPJ({ id: editandoPjId, valorHonorarioMensal: valorNovo }); })
+    .then(function () {
+      showToast("Ajuste de honorário registrado.");
+      el("ajusteHonorarioForm").reset();
+      el("pjValor").value = valorNovo;
+      return carregarPJ();
+    })
+    .then(function () { carregarAjustesHonorarioPJ(editandoPjId); })
+    .catch(function (err) { console.error(err); showToast("Não foi possível registrar: " + (err && err.message || "")); });
+});
 el("pjCancelEdit").addEventListener("click", limparFormularioPj);
 el("pjForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -1211,6 +1340,12 @@ function editarPj(id) {
   el("pjDataTermino").value = pj.dataTerminoRenovacao || "";
   el("pjFormTitle").textContent = "Editando — " + pj.nomeRazaoSocial;
   el("pjCancelEdit").hidden = false;
+  el("ajusteHonorarioWrap").style.display = "block";
+  el("ajusteHonorarioNome").textContent = pj.nomeRazaoSocial;
+  el("ajusteHonorarioForm").reset();
+  el("ajusteHonorarioData").value = new Date().toISOString().slice(0, 10);
+  el("ajusteHonorarioFormError").hidden = true;
+  carregarAjustesHonorarioPJ(id);
   window.scrollTo({ top: el("pjForm").offsetTop - 20, behavior: "smooth" });
 }
 function excluirPjUI(id) {

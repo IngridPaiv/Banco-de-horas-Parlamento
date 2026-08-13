@@ -169,6 +169,44 @@ function excluirPjPeriodo(id) {
   return colecao("pjPeriodos").doc(id).delete();
 }
 
+// ------------------------- Ajustes salariais (CLT — histórico) -------------------------
+// Cada ajuste vira um registro novo (não se edita depois), igual
+// rescisões/distratos, pra manter o histórico íntegro. Esta função só grava
+// o histórico — quem chama salvarAjusteSalarial() também precisa atualizar
+// o salarioBase do colaborador separadamente (ver js/app.js).
+function listarAjustesSalariais(colaboradorId) {
+  var ref = colecao("ajustesSalariais");
+  if (colaboradorId) ref = ref.where("colaboradorId", "==", colaboradorId);
+  return ref.orderBy("dataAjuste", "desc").get().then(snapToList);
+}
+function salvarAjusteSalarial(ajuste) {
+  var id = novoId("ajustesSalariais");
+  var dados = Object.assign({}, ajuste, {
+    criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    criadoPor: usuarioAtual ? usuarioAtual.uid : null,
+    criadoPorNome: usuarioAtual ? usuarioAtual.nome : null,
+  });
+  return colecao("ajustesSalariais").doc(id).set(dados).then(function () { return id; });
+}
+
+// ------------------------- Ajustes de honorário PJ (histórico) -------------------------
+// Mesma lógica do ajuste salarial de CLT, só que para o honorário mensal
+// de prestadores PJ.
+function listarAjustesHonorarioPJ(prestadorId) {
+  var ref = colecao("ajustesHonorarioPJ");
+  if (prestadorId) ref = ref.where("prestadorId", "==", prestadorId);
+  return ref.orderBy("dataAjuste", "desc").get().then(snapToList);
+}
+function salvarAjusteHonorarioPJ(ajuste) {
+  var id = novoId("ajustesHonorarioPJ");
+  var dados = Object.assign({}, ajuste, {
+    criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    criadoPor: usuarioAtual ? usuarioAtual.uid : null,
+    criadoPorNome: usuarioAtual ? usuarioAtual.nome : null,
+  });
+  return colecao("ajustesHonorarioPJ").doc(id).set(dados).then(function () { return id; });
+}
+
 // ------------------------- Distratos de PJ (Super Admin apenas) -------------------------
 // Histórico de encerramentos de contrato PJ — assim como em rescisões (CLT),
 // cada cálculo vira um registro novo (não se edita depois), para manter o
