@@ -1467,48 +1467,77 @@ document.addEventListener("keydown", function (e) {
   if (e.key === "Escape" && fichaAtual) fecharFicha();
 });
 
+// Reconstrói qual era o cargo (ou o salário/honorário) em cada data, a
+// partir dos pontos de mudança registrados nos ajustes. O cadastro
+// (entidade.cargo/salarioBase, etc.) guarda sempre o valor MAIS RECENTE —
+// então pra saber o que valia lá na admissão (ou em qualquer evento no meio
+// do caminho), a gente usa o "Anterior" guardado em cada ajuste, que é a
+// foto de como estava bem antes daquela mudança específica.
+function construirPontosHistorico(ajustes, dataAdmissao, valorAtual, chaveNovo, chaveAnterior) {
+  var mudancas = ajustes
+    .filter(function (a) { return a[chaveNovo] !== undefined && a[chaveNovo] !== null && a[chaveNovo] !== ""; })
+    .slice()
+    .sort(function (a, b) { return a.dataAjuste < b.dataAjuste ? -1 : 1; });
+  var pontos = [];
+  var naAdmissao = mudancas.length > 0 && (mudancas[0][chaveAnterior] || mudancas[0][chaveAnterior] === 0) ? mudancas[0][chaveAnterior] : valorAtual;
+  pontos.push({ data: dataAdmissao, valor: naAdmissao });
+  mudancas.forEach(function (m) { pontos.push({ data: m.dataAjuste, valor: m[chaveNovo] }); });
+  return pontos;
+}
+function valorNaData(pontos, data) {
+  var atual = pontos.length ? pontos[0].valor : null;
+  pontos.forEach(function (p) { if (p.data <= data) atual = p.valor; });
+  return atual;
+}
+
 function carregarFichaTimeline(tipo, id, entidade, cargoAtual) {
   var promessa = tipo === "clt"
     ? Promise.all([listarAjustesSalariais(id), listarFeriasGozos(id), listarRescisoes(id)])
     : Promise.all([listarAjustesHonorarioPJ(id), listarPjPeriodos(id), listarDistratosPJ(id)]);
 
   promessa.then(function (results) {
-    var eventos = [];
+    var ajustes = results[0];
     var valorAtual = tipo === "clt" ? entidade.salarioBase : entidade.valorHonorarioMensal;
+    var rotuloValor = tipo === "clt" ? "Salário" : "Honorário";
+    var pontosCargo = construirPontosHistorico(ajustes, entidade.dataAdmissao, cargoAtual, "cargoNovo", "cargoAnterior");
+    var pontosValor = construirPontosHistorico(ajustes, entidade.dataAdmissao, valorAtual, "valorNovo", "valorAnterior");
+    var eventos = [];
     eventos.push({
       data: entidade.dataAdmissao,
       ordem: 0,
       titulo: "Admissão",
-      detalhe: (cargoAtual || "—") + (valorAtual ? " · " + formataMoeda(valorAtual) : ""),
+      cargo: valorNaData(pontosCargo, entidade.dataAdmissao),
+      valorLabel: rotuloValor,
+      valor: valorNaData(pontosValor, entidade.dataAdmissao),
     });
 
     if (tipo === "clt") {
-      results[0].forEach(function (a) {
+      ajustes.forEach(function (a) {
         var partes = [];
-        if (a.cargoNovo) partes.push("Novo cargo: " + a.cargoNovo);
+        if (a.cargoNovo) partes.push("Novo cargo: " + a.cargoNovo + (a.cargoAnterior ? " (era " + a.cargoAnterior + ")" : ""));
         if (a.valorNovo) partes.push("Novo salário: " + formataMoeda(a.valorNovo) + (a.valorAnterior ? " (era " + formataMoeda(a.valorAnterior) + ")" : ""));
         if (a.motivo) partes.push(a.motivo);
-        eventos.push({ data: a.dataAjuste, ordem: 1, titulo: a.cargoNovo ? "Promoção / ajuste" : "Ajuste salarial", detalhe: partes.join(" · "), autor: a.criadoPorNome });
+        eventos.push({ data: a.dataAjuste, ordem: 1, titulo: a.cargoNovo ? "Promoção / ajuste" : "Ajuste salarial", cargo: valorNaData(pontosCargo, a.dataAjuste), valorLabel: rotuloValor, valor: valorNaData(pontosValor, a.dataAjuste), detalhe: partes.join(" · "), autor: a.criadoPorNome });
       });
       results[1].forEach(function (g) {
-        eventos.push({ data: g.dataInicio, ordem: 1, titulo: "Férias", detalhe: (g.dias ? g.dias + " dia(s)" : "") + (g.dataFim ? " — até " + formatDateBR(g.dataFim) : ""), autor: g.criadoPorNome });
+        eventos.push({ data: g.dataInicio, ordem: 1, titulo: "Férias", cargo: valorNaData(pontosCargo, g.dataInicio), valorLabel: rotuloValor, valor: valorNaData(pontosValor, g.dataInicio), detalhe: (g.dias ? g.dias + " dia(s)" : "") + (g.dataFim ? " — até " + formatDateBR(g.dataFim) : ""), autor: g.criadoPorNome });
       });
       results[2].forEach(function (r) {
-        eventos.push({ data: r.dataDemissao, ordem: 2, titulo: "Rescisão (" + (TIPOS_RESCISAO[r.tipoRescisao] || r.tipoRescisao) + ")", detalhe: "Total estimado: " + formataMoeda(r.resultado ? r.resultado.total : 0), autor: r.criadoPorNome });
+        eventos.push({ data: r.dataDemissao, ordem: 2, titulo: "Rescisão (" + (TIPOS_RESCISAO[r.tipoRescisao] || r.tipoRescisao) + ")", cargo: valorNaData(pontosCargo, r.dataDemissao), valorLabel: rotuloValor, valor: valorNaData(pontosValor, r.dataDemissao), detalhe: "Total estimado: " + formataMoeda(r.resultado ? r.resultado.total : 0), autor: r.criadoPorNome });
       });
     } else {
-      results[0].forEach(function (a) {
+      ajustes.forEach(function (a) {
         var partes = [];
-        if (a.cargoNovo) partes.push("Novo cargo/função: " + a.cargoNovo);
+        if (a.cargoNovo) partes.push("Novo cargo/função: " + a.cargoNovo + (a.cargoAnterior ? " (era " + a.cargoAnterior + ")" : ""));
         if (a.valorNovo) partes.push("Novo honorário: " + formataMoeda(a.valorNovo) + (a.valorAnterior ? " (era " + formataMoeda(a.valorAnterior) + ")" : ""));
         if (a.motivo) partes.push(a.motivo);
-        eventos.push({ data: a.dataAjuste, ordem: 1, titulo: a.cargoNovo ? "Promoção / ajuste" : "Ajuste de honorário", detalhe: partes.join(" · "), autor: a.criadoPorNome });
+        eventos.push({ data: a.dataAjuste, ordem: 1, titulo: a.cargoNovo ? "Promoção / ajuste" : "Ajuste de honorário", cargo: valorNaData(pontosCargo, a.dataAjuste), valorLabel: rotuloValor, valor: valorNaData(pontosValor, a.dataAjuste), detalhe: partes.join(" · "), autor: a.criadoPorNome });
       });
       results[1].forEach(function (p) {
-        eventos.push({ data: p.dataInicio, ordem: 1, titulo: "Período sem prestação de serviço", detalhe: (p.dataFim ? "até " + formatDateBR(p.dataFim) : "") + (p.observacao ? " · " + p.observacao : ""), autor: p.criadoPorNome });
+        eventos.push({ data: p.dataInicio, ordem: 1, titulo: "Período sem prestação de serviço", cargo: valorNaData(pontosCargo, p.dataInicio), valorLabel: rotuloValor, valor: valorNaData(pontosValor, p.dataInicio), detalhe: (p.dataFim ? "até " + formatDateBR(p.dataFim) : "") + (p.observacao ? " · " + p.observacao : ""), autor: p.criadoPorNome });
       });
       results[2].forEach(function (d) {
-        eventos.push({ data: d.dataEncerramento, ordem: 2, titulo: "Distrato (" + (MOTIVOS_DISTRATO_PJ[d.motivo] || d.motivo) + ")", detalhe: "Honorário proporcional: " + formataMoeda(d.honorarioProporcional), autor: d.criadoPorNome });
+        eventos.push({ data: d.dataEncerramento, ordem: 2, titulo: "Distrato (" + (MOTIVOS_DISTRATO_PJ[d.motivo] || d.motivo) + ")", cargo: valorNaData(pontosCargo, d.dataEncerramento), valorLabel: rotuloValor, valor: valorNaData(pontosValor, d.dataEncerramento), detalhe: "Honorário proporcional: " + formataMoeda(d.honorarioProporcional), autor: d.criadoPorNome });
       });
     }
 
@@ -1529,6 +1558,7 @@ function renderFichaTimeline(eventos) {
     return '<div class="timeline-item">' +
       '<div class="timeline-data">' + (ev.data ? formatDateBR(ev.data) : '—') + '</div>' +
       '<div class="timeline-corpo"><strong>' + ev.titulo + '</strong>' +
+      '<span>Cargo: ' + (ev.cargo || '—') + (ev.valor ? ' · ' + ev.valorLabel + ': ' + formataMoeda(ev.valor) : '') + '</span>' +
       (ev.detalhe ? '<span>' + ev.detalhe + '</span>' : '') +
       (ev.autor ? '<small style="color:var(--ink-faint);">registrado por ' + ev.autor + '</small>' : '') +
       '</div></div>';

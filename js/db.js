@@ -13,6 +13,23 @@ function colecao(nome) { return db.collection(nome); }
 
 function novoId(colecaoNome) { return colecao(colecaoNome).doc().id; }
 
+// Ordena uma lista já carregada por um campo de data (string "AAAA-MM-DD",
+// que ordena certo em texto puro), da mais recente pra mais antiga.
+// Usado no lugar de ".orderBy()" do Firestore nas consultas que combinam
+// filtro (".where") com ordenação por outro campo — essa combinação exige
+// criar um índice composto manualmente no Console do Firebase, o que trava
+// a tela com "Missing or insufficient permissions" / "query requires an
+// index" até alguém lembrar de criar; ordenando aqui no navegador (as
+// listas desse sistema são pequenas) a gente evita depender disso.
+function ordenarPorDataDesc(lista, campo) {
+  return lista.slice().sort(function (a, b) {
+    var va = a[campo] || "";
+    var vb = b[campo] || "";
+    if (va === vb) return 0;
+    return va < vb ? 1 : -1;
+  });
+}
+
 // Carimba QUEM fez a alteração e QUANDO — em todo salvamento (criação ou
 // edição), não só no primeiro. Guarda o nome já pronto (não só o uid) para
 // aparecer na tela sem precisar de outra consulta ao banco.
@@ -52,7 +69,7 @@ function excluirColaborador(id) {
 function listarRegistros(colaboradorId) {
   var ref = colecao("registros");
   if (colaboradorId) ref = ref.where("colaboradorId", "==", colaboradorId);
-  return ref.orderBy("data", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "data"); });
 }
 function salvarRegistro(registro) {
   var id = registro.id || novoId("registros");
@@ -73,7 +90,7 @@ function excluirRegistro(id) {
 function listarAjustes(colaboradorId) {
   var ref = colecao("ajustes");
   if (colaboradorId) ref = ref.where("colaboradorId", "==", colaboradorId);
-  return ref.orderBy("data", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "data"); });
 }
 function salvarAjuste(ajuste) {
   var id = ajuste.id || novoId("ajustes");
@@ -94,7 +111,7 @@ function excluirAjuste(id) {
 function listarFeriasGozos(colaboradorId) {
   var ref = colecao("feriasGozos");
   if (colaboradorId) ref = ref.where("colaboradorId", "==", colaboradorId);
-  return ref.orderBy("dataInicio", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "dataInicio"); });
 }
 function salvarFeriasGozo(gozo) {
   var id = gozo.id || novoId("feriasGozos");
@@ -115,7 +132,7 @@ function excluirFeriasGozo(id) {
 function listarRescisoes(colaboradorId) {
   var ref = colecao("rescisoes");
   if (colaboradorId) ref = ref.where("colaboradorId", "==", colaboradorId);
-  return ref.orderBy("dataDemissao", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "dataDemissao"); });
 }
 function salvarRescisao(rescisao) {
   var id = novoId("rescisoes");
@@ -152,7 +169,7 @@ function excluirPrestadorPJ(id) {
 function listarPjPeriodos(pjId) {
   var ref = colecao("pjPeriodos");
   if (pjId) ref = ref.where("prestadorId", "==", pjId);
-  return ref.orderBy("dataInicio", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "dataInicio"); });
 }
 function salvarPjPeriodo(periodo) {
   var id = periodo.id || novoId("pjPeriodos");
@@ -177,7 +194,7 @@ function excluirPjPeriodo(id) {
 function listarAjustesSalariais(colaboradorId) {
   var ref = colecao("ajustesSalariais");
   if (colaboradorId) ref = ref.where("colaboradorId", "==", colaboradorId);
-  return ref.orderBy("dataAjuste", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "dataAjuste"); });
 }
 function salvarAjusteSalarial(ajuste) {
   var id = novoId("ajustesSalariais");
@@ -195,7 +212,7 @@ function salvarAjusteSalarial(ajuste) {
 function listarAjustesHonorarioPJ(prestadorId) {
   var ref = colecao("ajustesHonorarioPJ");
   if (prestadorId) ref = ref.where("prestadorId", "==", prestadorId);
-  return ref.orderBy("dataAjuste", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "dataAjuste"); });
 }
 function salvarAjusteHonorarioPJ(ajuste) {
   var id = novoId("ajustesHonorarioPJ");
@@ -214,7 +231,7 @@ function salvarAjusteHonorarioPJ(ajuste) {
 function listarDistratosPJ(prestadorId) {
   var ref = colecao("distratosPJ");
   if (prestadorId) ref = ref.where("prestadorId", "==", prestadorId);
-  return ref.orderBy("dataEncerramento", "desc").get().then(snapToList);
+  return ref.get().then(snapToList).then(function (lista) { return ordenarPorDataDesc(lista, "dataEncerramento"); });
 }
 function salvarDistratoPJ(distrato) {
   var id = novoId("distratosPJ");

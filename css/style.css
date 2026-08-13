@@ -14,6 +14,7 @@
   --ink-soft: #5B6478;
   --ink-faint: #98A0B3;
   --border: #DCE6F5;
+  --border-card: #A9C2E8;
   --primary: #17356B;
   --primary-dark: #0E2347;
   --primary-light: #EAF0FB;
@@ -33,6 +34,7 @@
   --radius-sm: 8px;
   --shadow-1: 0 1px 2px rgba(16,32,63,.06), 0 1px 1px rgba(16,32,63,.04);
   --shadow-2: 0 12px 28px rgba(16,32,63,.14);
+  --shadow-card: 0 2px 7px rgba(16,32,63,.09), 0 1px 2px rgba(16,32,63,.06);
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -44,6 +46,7 @@
   --ink-soft: #9FACC9;
   --ink-faint: #67729A;
   --border: #263050;
+  --border-card: #3C4A78;
   --primary: #4C8DFF;
   --primary-dark: #2F6FE4;
   --primary-light: #1B2A4E;
@@ -60,6 +63,7 @@
   --pj-bg: #221A3C;
   --shadow-1: 0 1px 2px rgba(0,0,0,.35), 0 1px 1px rgba(0,0,0,.25);
   --shadow-2: 0 12px 28px rgba(0,0,0,.5);
+  --shadow-card: 0 2px 8px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
 }
 *{ box-sizing: border-box; }
 html,body{ margin:0; padding:0; }
@@ -120,7 +124,7 @@ h1,h2,h3{ font-family: var(--font-display); color: var(--ink); margin:0; font-we
 .view-head{ margin:2px 0 22px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .view-head h1{ font-size:1.45rem; margin-bottom:4px; }
 .view-head p{ color: var(--ink-soft); margin:0; font-size:.88rem; }
-.card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); padding:22px; }
+.card{ background: var(--surface); border:1.5px solid var(--border-card); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); padding:22px; }
 .cards-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap:16px; }
 .emp-card{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); padding:20px; display:flex; gap:16px; align-items:center; position:relative; overflow:hidden; transition: box-shadow .15s ease, transform .15s ease; }
 .emp-card:hover{ box-shadow: var(--shadow-2); transform: translateY(-1px); }
