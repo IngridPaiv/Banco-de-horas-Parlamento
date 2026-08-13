@@ -44,9 +44,9 @@
     </div>
     <div class="login-formpane">
       <div class="login-box">
-        <p class="login-eyebrow">Acesso ao sistema</p>
-        <h1 class="login-title">Entrar</h1>
-        <p class="login-sub">Use o e-mail e a senha cadastrados para acessar sua conta.</p>
+        <p class="login-eyebrow" id="loginEyebrow">Acesso ao sistema</p>
+        <h1 class="login-title" id="loginTitulo">Entrar</h1>
+        <p class="login-sub" id="loginSub">Use o e-mail e a senha cadastrados para acessar sua conta.</p>
         <form id="loginForm">
           <div class="field">
             <label for="loginEmail">E-mail</label>
@@ -58,6 +58,19 @@
           </div>
           <p id="loginError" class="form-error" role="alert" hidden></p>
           <button type="submit" class="btn btn-primary" id="btnLogin">Entrar</button>
+          <button type="button" id="linkEsqueciSenha" class="link-nome" style="display:block;margin:14px auto 0;">Esqueci minha senha</button>
+        </form>
+
+        <form id="esqueciSenhaForm" hidden>
+          <p class="login-sub" style="margin:0 0 16px;">Digite o e-mail da sua conta — vamos enviar um link para você criar uma senha nova.</p>
+          <div class="field">
+            <label for="esqueciSenhaEmail">E-mail</label>
+            <input type="email" id="esqueciSenhaEmail" required autocomplete="username">
+          </div>
+          <p id="esqueciSenhaError" class="form-error" role="alert" hidden></p>
+          <p id="esqueciSenhaOk" class="form-ok" role="status" hidden></p>
+          <button type="submit" class="btn btn-primary" id="btnEsqueciSenha">Enviar link de redefinição</button>
+          <button type="button" id="linkVoltarLogin" class="link-nome" style="display:block;margin:14px auto 0;">Voltar para o login</button>
         </form>
       </div>
     </div>
@@ -290,7 +303,9 @@
               </div>
               <div class="field"><label for="gozoInicio">Início do gozo</label><input type="date" id="gozoInicio" required></div>
               <div class="field"><label for="gozoFim">Fim do gozo</label><input type="date" id="gozoFim" required></div>
+              <div class="field"><label for="gozoMotivo">Justificativa (opcional)</label><input type="text" id="gozoMotivo" placeholder="Ex: férias coletivas, pedido do colaborador..."></div>
             </div>
+            <p id="gozoDiasPreview" class="form-hint" hidden></p>
             <p id="gozoFormError" class="form-error" role="alert" hidden></p>
             <div class="form-actions">
               <button type="submit" class="btn btn-primary">Lançar férias gozadas</button>
@@ -298,7 +313,7 @@
           </form>
           <div class="table-wrap card" style="margin-top:16px;">
             <table class="data-table">
-              <thead><tr><th>Colaborador</th><th>Período aquisitivo</th><th>Gozo</th><th>Dias</th><th>Lançado por</th><th></th></tr></thead>
+              <thead><tr><th>Colaborador</th><th>Período aquisitivo</th><th>Gozo</th><th>Dias</th><th>Justificativa</th><th>Lançado por</th><th></th></tr></thead>
               <tbody id="gozosBody"></tbody>
             </table>
             <p id="gozosVazio" class="empty-state" hidden>Nenhuma férias lançada ainda.</p>
@@ -445,7 +460,8 @@
           </div>
           <p id="ajusteSalarialFormError" class="form-error" role="alert" hidden></p>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Registrar ajuste</button>
+            <button type="button" id="ajusteSalarialCancelEdit" class="btn btn-ghost" hidden>Cancelar edição</button>
+            <button type="submit" id="ajusteSalarialSubmitBtn" class="btn btn-primary">Registrar ajuste</button>
           </div>
         </form>
         <div class="card" style="margin-top:16px;">
@@ -583,7 +599,8 @@
           </div>
           <p id="ajusteHonorarioFormError" class="form-error" role="alert" hidden></p>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Registrar ajuste</button>
+            <button type="button" id="ajusteHonorarioCancelEdit" class="btn btn-ghost" hidden>Cancelar edição</button>
+            <button type="submit" id="ajusteHonorarioSubmitBtn" class="btn btn-primary">Registrar ajuste</button>
           </div>
         </form>
         <div class="card" style="margin-top:16px;">
@@ -613,8 +630,9 @@
             </div>
             <div class="field"><label for="pjPeriodoInicio">Início</label><input type="date" id="pjPeriodoInicio" required></div>
             <div class="field"><label for="pjPeriodoFim">Fim</label><input type="date" id="pjPeriodoFim" required></div>
-            <div class="field"><label for="pjPeriodoObs">Observação</label><input type="text" id="pjPeriodoObs" placeholder="Ex: avisou que vai viajar"></div>
+            <div class="field"><label for="pjPeriodoObs">Observação / justificativa</label><input type="text" id="pjPeriodoObs" placeholder="Ex: avisou que vai viajar"></div>
           </div>
+          <p id="pjPeriodoDiasPreview" class="form-hint" hidden></p>
           <p id="pjPeriodoFormError" class="form-error" role="alert" hidden></p>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">Lançar período</button>
