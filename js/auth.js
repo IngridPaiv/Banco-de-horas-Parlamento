@@ -20,12 +20,17 @@ var LIMITE_CONTAS = 3;
 
 var usuarioAtual = null; // { uid, nome, email, perfil, colaboradorId, ativo }
 var authProntoCallbacks = [];
-
-function onAuthPronto(cb) {
-  if (usuarioAtual !== null || authJaResolveu) { cb(usuarioAtual); }
-  else { authProntoCallbacks.push(cb); }
-}
 var authJaResolveu = false;
+var ultimoResultadoAuth = null; // último valor emitido (usuarioAtual, {semPerfil}/{inativo}, ou null)
+
+// Inscrição PERSISTENTE: a callback registrada aqui é chamada não só na
+// primeira vez que o login é resolvido, mas TODA VEZ que o estado de auth
+// muda depois disso (login, logout, troca de conta) — é assim que a tela
+// consegue voltar para o login sozinha quando alguém clica em "Sair".
+function onAuthPronto(cb) {
+  authProntoCallbacks.push(cb);
+  if (authJaResolveu) cb(ultimoResultadoAuth);
+}
 
 function carregarPerfilUsuario(firebaseUser) {
   return db.collection("usuarios").doc(firebaseUser.uid).get().then(function (doc) {
@@ -124,21 +129,22 @@ auth.onAuthStateChanged(function (firebaseUser) {
   if (!firebaseUser) {
     usuarioAtual = null;
     authJaResolveu = true;
+    ultimoResultadoAuth = null;
     authProntoCallbacks.forEach(function (cb) { cb(null); });
-    authProntoCallbacks = [];
     return;
   }
   carregarPerfilUsuario(firebaseUser).then(function (perfilResolvido) {
     if (!perfilResolvido || perfilResolvido.inativo) {
       usuarioAtual = null;
       authJaResolveu = true;
-      authProntoCallbacks.forEach(function (cb) { cb({ semPerfil: !perfilResolvido, inativo: !!(perfilResolvido && perfilResolvido.inativo) }); });
-      authProntoCallbacks = [];
+      var resultado = { semPerfil: !perfilResolvido, inativo: !!(perfilResolvido && perfilResolvido.inativo) };
+      ultimoResultadoAuth = resultado;
+      authProntoCallbacks.forEach(function (cb) { cb(resultado); });
       return;
     }
     usuarioAtual = perfilResolvido;
     authJaResolveu = true;
+    ultimoResultadoAuth = usuarioAtual;
     authProntoCallbacks.forEach(function (cb) { cb(usuarioAtual); });
-    authProntoCallbacks = [];
   });
 });
