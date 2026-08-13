@@ -404,7 +404,7 @@
         <div class="form-grid">
           <div class="field"><label for="empCargo">Cargo</label><input type="text" id="empCargo" placeholder="Ex: Assessor parlamentar"></div>
           <div class="field"><label for="empDataAdmissao">Data de admissão</label><input type="date" id="empDataAdmissao" required></div>
-          <div class="field"><label for="empSalario">Salário (R$)</label><input type="number" id="empSalario" min="0" step="0.01" placeholder="0,00"></div>
+          <div class="field"><label for="empSalario">Salário (R$)</label><input type="text" id="empSalario" placeholder="0,00"></div>
         </div>
 
         <div class="form-section-title">Jornada de trabalho</div>
@@ -439,7 +439,7 @@
         <form id="ajusteSalarialForm">
           <div class="form-grid">
             <div class="field"><label for="ajusteSalarialData">Data do ajuste</label><input type="date" id="ajusteSalarialData" required></div>
-            <div class="field"><label for="ajusteSalarialValor">Novo salário (R$)</label><input type="number" id="ajusteSalarialValor" min="0" step="0.01" placeholder="0,00" required></div>
+            <div class="field"><label for="ajusteSalarialValor">Novo salário (R$)</label><input type="text" id="ajusteSalarialValor" placeholder="0,00" required></div>
             <div class="field"><label for="ajusteSalarialMotivo">Motivo (opcional)</label><input type="text" id="ajusteSalarialMotivo" placeholder="Ex: reajuste anual, promoção..."></div>
           </div>
           <p id="ajusteSalarialFormError" class="form-error" role="alert" hidden></p>
@@ -554,7 +554,7 @@
           <div class="field"><label for="pjCnpj">CNPJ</label><input type="text" id="pjCnpj" placeholder="00.000.000/0000-00"></div>
           <div class="field"><label for="pjCargo">Cargo / Função</label><input type="text" id="pjCargo" required></div>
           <div class="field"><label for="pjDataAdmissao">Data de início do contrato</label><input type="date" id="pjDataAdmissao" required></div>
-          <div class="field"><label for="pjValor">Valor honorário mensal (R$)</label><input type="number" id="pjValor" min="0" step="0.01" required></div>
+          <div class="field"><label for="pjValor">Valor honorário mensal (R$)</label><input type="text" id="pjValor" placeholder="0,00" required></div>
           <div class="field"><label for="pjStatus">Status do contrato</label>
             <select id="pjStatus" required>
               <option value="Ativo">Ativo</option>
@@ -579,7 +579,7 @@
         <form id="ajusteHonorarioForm">
           <div class="form-grid">
             <div class="field"><label for="ajusteHonorarioData">Data do ajuste</label><input type="date" id="ajusteHonorarioData" required></div>
-            <div class="field"><label for="ajusteHonorarioValor">Novo honorário mensal (R$)</label><input type="number" id="ajusteHonorarioValor" min="0" step="0.01" placeholder="0,00" required></div>
+            <div class="field"><label for="ajusteHonorarioValor">Novo honorário mensal (R$)</label><input type="text" id="ajusteHonorarioValor" placeholder="0,00" required></div>
             <div class="field"><label for="ajusteHonorarioMotivo">Motivo (opcional)</label><input type="text" id="ajusteHonorarioMotivo" placeholder="Ex: revisão de escopo, reajuste anual..."></div>
           </div>
           <p id="ajusteHonorarioFormError" class="form-error" role="alert" hidden></p>

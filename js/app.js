@@ -518,6 +518,41 @@ function editarRegistro(id) {
 }
 function formatDateBR(iso) { var p = iso.split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
 
+// -------------------- Valor em R$ no formato brasileiro --------------------
+// Os campos de salário/honorário eram <input type="number">, que só aceita
+// PONTO como separador decimal e não entende ponto de milhar — então
+// digitar "6.000" pensando em "seis mil" virava 6 (seis) ao salvar, porque
+// o navegador lia o ponto como decimal. Agora são campos de texto livres
+// (a pessoa digita do jeito que já costuma: "6.000", "6000" ou "6000,50")
+// e a gente interpreta certo ao sair do campo/salvar: vírgula é sempre
+// decimal, ponto é sempre separador de milhar (nunca decimal) — é assim
+// que se escreve valor em R$ no Brasil.
+function moedaParaNumero(valorDigitado) {
+  if (!valorDigitado) return 0;
+  var limpo = String(valorDigitado).trim().replace(/[^\d.,]/g, "");
+  if (limpo.indexOf(",") !== -1) {
+    limpo = limpo.replace(/\./g, "").replace(",", ".");
+  } else {
+    limpo = limpo.replace(/\./g, "");
+  }
+  var n = parseFloat(limpo);
+  return isNaN(n) ? 0 : n;
+}
+function numeroParaMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Ao sair do campo, reformata pro padrão R$ 6.000,00 — assim a pessoa vê na
+// hora se o sistema entendeu o valor do jeito certo, antes mesmo de salvar.
+["empSalario", "pjValor", "ajusteSalarialValor", "ajusteHonorarioValor"].forEach(function (id) {
+  var input = el(id);
+  input.setAttribute("inputmode", "decimal");
+  input.addEventListener("blur", function () {
+    if (!input.value.trim()) return;
+    var numero = moedaParaNumero(input.value);
+    input.value = numero ? numeroParaMoeda(numero) : "";
+  });
+});
+
 // ==========================================================================
 // HISTÓRICO
 // ==========================================================================
@@ -749,10 +784,10 @@ el("ajusteSalarialForm").addEventListener("submit", function (e) {
   var colaborador = getColaborador(editandoEmpId);
   if (!colaborador) return;
   var dataAjuste = el("ajusteSalarialData").value;
-  var valorNovo = el("ajusteSalarialValor").value ? parseFloat(el("ajusteSalarialValor").value) : null;
+  var valorNovo = moedaParaNumero(el("ajusteSalarialValor").value);
   var motivo = el("ajusteSalarialMotivo").value.trim();
   if (!dataAjuste) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe a data do ajuste."; return; }
-  if (valorNovo === null || valorNovo <= 0) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe o novo salário."; return; }
+  if (!valorNovo || valorNovo <= 0) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe o novo salário."; return; }
   el("ajusteSalarialFormError").hidden = true;
 
   var registro = {
@@ -769,7 +804,7 @@ el("ajusteSalarialForm").addEventListener("submit", function (e) {
     .then(function () {
       setSync("ok"); showToast("Ajuste salarial registrado.");
       el("ajusteSalarialForm").reset();
-      el("empSalario").value = valorNovo;
+      el("empSalario").value = numeroParaMoeda(valorNovo);
       return carregarTudo(false);
     })
     .then(function () { carregarAjustesSalariais(editandoEmpId); })
@@ -805,7 +840,7 @@ el("empForm").addEventListener("submit", function (e) {
     telefone: el("empTelefone").value.trim(),
     cargo: el("empCargo").value.trim(),
     dataAdmissao: el("empDataAdmissao").value,
-    salarioBase: el("empSalario").value ? parseFloat(el("empSalario").value) : 0,
+    salarioBase: moedaParaNumero(el("empSalario").value),
     entrada: el("empEntrada").value,
     saidaAlmoco: el("empSaidaAlmoco").value,
     retornoAlmoco: el("empRetornoAlmoco").value,
@@ -829,7 +864,7 @@ function editarFuncionario(id) {
   el("empTelefone").value = c.telefone || "";
   el("empCargo").value = c.cargo || "";
   el("empDataAdmissao").value = c.dataAdmissao || "";
-  el("empSalario").value = c.salarioBase || "";
+  el("empSalario").value = c.salarioBase ? numeroParaMoeda(c.salarioBase) : "";
   el("empEntrada").value = c.entrada;
   el("empSaidaAlmoco").value = c.saidaAlmoco;
   el("empRetornoAlmoco").value = c.retornoAlmoco;
@@ -1282,10 +1317,10 @@ el("ajusteHonorarioForm").addEventListener("submit", function (e) {
   var pj = prestadoresPJ.filter(function (p) { return p.id === editandoPjId; })[0];
   if (!pj) return;
   var dataAjuste = el("ajusteHonorarioData").value;
-  var valorNovo = el("ajusteHonorarioValor").value ? parseFloat(el("ajusteHonorarioValor").value) : null;
+  var valorNovo = moedaParaNumero(el("ajusteHonorarioValor").value);
   var motivo = el("ajusteHonorarioMotivo").value.trim();
   if (!dataAjuste) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe a data do ajuste."; return; }
-  if (valorNovo === null || valorNovo <= 0) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe o novo honorário."; return; }
+  if (!valorNovo || valorNovo <= 0) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe o novo honorário."; return; }
   el("ajusteHonorarioFormError").hidden = true;
 
   var registro = {
@@ -1301,7 +1336,7 @@ el("ajusteHonorarioForm").addEventListener("submit", function (e) {
     .then(function () {
       showToast("Ajuste de honorário registrado.");
       el("ajusteHonorarioForm").reset();
-      el("pjValor").value = valorNovo;
+      el("pjValor").value = numeroParaMoeda(valorNovo);
       return carregarPJ();
     })
     .then(function () { carregarAjustesHonorarioPJ(editandoPjId); })
@@ -1316,7 +1351,7 @@ el("pjForm").addEventListener("submit", function (e) {
     cnpj: el("pjCnpj").value.trim(),
     cargoFuncao: el("pjCargo").value.trim(),
     dataAdmissao: el("pjDataAdmissao").value,
-    valorHonorarioMensal: el("pjValor").value ? parseFloat(el("pjValor").value) : 0,
+    valorHonorarioMensal: moedaParaNumero(el("pjValor").value),
     statusContrato: el("pjStatus").value,
     dataTerminoRenovacao: el("pjDataTermino").value || null,
   };
@@ -1335,7 +1370,7 @@ function editarPj(id) {
   el("pjCnpj").value = pj.cnpj || "";
   el("pjCargo").value = pj.cargoFuncao || "";
   el("pjDataAdmissao").value = pj.dataAdmissao || "";
-  el("pjValor").value = pj.valorHonorarioMensal || "";
+  el("pjValor").value = pj.valorHonorarioMensal ? numeroParaMoeda(pj.valorHonorarioMensal) : "";
   el("pjStatus").value = pj.statusContrato || "Ativo";
   el("pjDataTermino").value = pj.dataTerminoRenovacao || "";
   el("pjFormTitle").textContent = "Editando — " + pj.nomeRazaoSocial;
