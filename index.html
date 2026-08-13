@@ -130,11 +130,11 @@
       <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="3" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="12" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="16" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg>
       <span>Painel</span>
     </button>
-    <button class="tab-btn" data-view="registro" data-perfis="super_admin,admin,funcionario">
+    <button class="tab-btn" data-view="registro" data-perfis="super_admin,funcionario">
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
       <span>Registrar ponto</span>
     </button>
-    <button class="tab-btn" data-view="historico" data-perfis="super_admin,admin,funcionario">
+    <button class="tab-btn" data-view="historico" data-perfis="super_admin,funcionario">
       <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span>Histórico</span>
     </button>
@@ -151,11 +151,11 @@
       <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="6" r="2" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="18" r="2" stroke="currentColor" stroke-width="1.6"/></svg>
       <span>Ajustes</span>
     </button>
-    <button class="tab-btn" data-view="colaboradores" data-perfis="super_admin,admin">
+    <button class="tab-btn" data-view="colaboradores" data-perfis="super_admin">
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Colaboradores</span>
     </button>
-    <button class="tab-btn" data-view="rescisao" data-perfis="super_admin,admin">
+    <button class="tab-btn" data-view="rescisao" data-perfis="super_admin">
       <svg viewBox="0 0 24 24" fill="none"><path d="M9 12h6M9 16h6M9 8h1M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
       <span>Rescisão</span>
     </button>
@@ -564,7 +564,6 @@
           <div class="field"><label for="usrSenha">Senha inicial</label><input type="text" id="usrSenha" required minlength="6" placeholder="mín. 6 caracteres"></div>
           <div class="field"><label for="usrPerfil">Perfil</label>
             <select id="usrPerfil" required>
-              <option value="funcionario">Funcionário (autoatendimento)</option>
               <option value="admin">Admin / RH</option>
               <option value="super_admin">Super Admin (acesso total + PJ)</option>
             </select>
