@@ -754,30 +754,29 @@ function limparFormularioEmp() {
 
 // ------------------------- Ajuste salarial (histórico) -------------------------
 function carregarAjustesSalariais(colaboradorId) {
-  el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="6" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
+  el("ajustesSalariaisBody").innerHTML = '<div class="empty-dashboard"><span class="spinner"></span> Carregando...</div>';
   listarAjustesSalariais(colaboradorId).then(function (lista) {
     ajustesSalariais = lista;
     renderAjustesSalariais();
   }).catch(function (err) {
     console.error(err);
-    el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="6" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
+    el("ajustesSalariaisBody").innerHTML = '<p class="empty-dashboard">Não foi possível carregar: ' + (err && err.message || '') + '</p>';
   });
 }
 function renderAjustesSalariais() {
   var body = el("ajustesSalariaisBody");
-  body.innerHTML = "";
   el("ajustesSalariaisVazio").hidden = ajustesSalariais.length !== 0;
-  ajustesSalariais.forEach(function (a) {
-    var tr = document.createElement("tr");
-    tr.innerHTML =
-      '<td>' + formatDateBR(a.dataAjuste) + '</td>' +
-      '<td>' + (a.valorNovo ? formataMoeda(a.valorAnterior || 0) : '—') + '</td>' +
-      '<td>' + (a.valorNovo ? formataMoeda(a.valorNovo) : '—') + '</td>' +
-      '<td>' + (a.cargoNovo || '—') + '</td>' +
-      '<td>' + (a.motivo || '—') + '</td>' +
-      '<td><small style="color:var(--ink-faint);">' + (a.criadoPorNome || '—') + '</small></td>';
-    body.appendChild(tr);
-  });
+  if (ajustesSalariais.length === 0) { body.innerHTML = ""; return; }
+  body.innerHTML = ajustesSalariais.map(function (a) {
+    return '<div class="timeline-item">' +
+      '<div class="timeline-data">' + formatDateBR(a.dataAjuste) + '</div>' +
+      '<div class="timeline-corpo"><strong>' + (a.cargoNovo ? 'Promoção / ajuste' : 'Ajuste salarial') + '</strong>' +
+      (a.valorNovo ? '<span>Salário: ' + formataMoeda(a.valorAnterior || 0) + ' → ' + formataMoeda(a.valorNovo) + '</span>' : '') +
+      (a.cargoNovo ? '<span>Cargo: ' + a.cargoNovo + '</span>' : '') +
+      (a.motivo ? '<span>' + a.motivo + '</span>' : '') +
+      '<small style="color:var(--ink-faint);">registrado por ' + (a.criadoPorNome || '—') + '</small>' +
+      '</div></div>';
+  }).join("");
 }
 el("ajusteSalarialForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -918,6 +917,7 @@ function renderAdminList() {
     row.innerHTML =
       '<div class="emp-admin-info"><button type="button" class="link-nome" data-action="ficha" data-id="' + c.id + '">' + c.nome + '</button><span>' + (c.cargo ? c.cargo + ' · ' : '') + 'admitido em ' + (c.dataAdmissao ? formatDateBR(c.dataAdmissao) : '—') + ' · ' + c.entrada + '–' + c.saida + ' · jornada ' + minutesToHHMM(jornadaMinutos(c)) + ' · ' + diasResumo(c.dias) + (c.salarioBase ? ' · R$ ' + Number(c.salarioBase).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : '') + '<br><small style="color:var(--ink-faint);">última edição por ' + (c.atualizadoPorNome || c.criadoPorNome || '—') + '</small></span></div>' +
       '<div class="emp-admin-actions">' +
+        '<button class="btn-icon" data-action="ficha" data-id="' + c.id + '" title="Ver histórico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3.5 2M20 12a8 8 0 1 1-3-6.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4v4h-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
         '<button class="btn-icon" data-action="editar" data-id="' + c.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
         '<button class="btn-icon danger" data-action="excluir" data-id="' + c.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '</div>';
@@ -1297,30 +1297,29 @@ function limparFormularioPj() {
 
 // ------------------------- Ajuste de honorário PJ (histórico) -------------------------
 function carregarAjustesHonorarioPJ(prestadorId) {
-  el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="6" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
+  el("ajustesHonorarioBody").innerHTML = '<div class="empty-dashboard"><span class="spinner"></span> Carregando...</div>';
   listarAjustesHonorarioPJ(prestadorId).then(function (lista) {
     ajustesHonorarioPJ = lista;
     renderAjustesHonorarioPJ();
   }).catch(function (err) {
     console.error(err);
-    el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="6" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
+    el("ajustesHonorarioBody").innerHTML = '<p class="empty-dashboard">Não foi possível carregar: ' + (err && err.message || '') + '</p>';
   });
 }
 function renderAjustesHonorarioPJ() {
   var body = el("ajustesHonorarioBody");
-  body.innerHTML = "";
   el("ajustesHonorarioVazio").hidden = ajustesHonorarioPJ.length !== 0;
-  ajustesHonorarioPJ.forEach(function (a) {
-    var tr = document.createElement("tr");
-    tr.innerHTML =
-      '<td>' + formatDateBR(a.dataAjuste) + '</td>' +
-      '<td>' + (a.valorNovo ? formataMoeda(a.valorAnterior || 0) : '—') + '</td>' +
-      '<td>' + (a.valorNovo ? formataMoeda(a.valorNovo) : '—') + '</td>' +
-      '<td>' + (a.cargoNovo || '—') + '</td>' +
-      '<td>' + (a.motivo || '—') + '</td>' +
-      '<td><small style="color:var(--ink-faint);">' + (a.criadoPorNome || '—') + '</small></td>';
-    body.appendChild(tr);
-  });
+  if (ajustesHonorarioPJ.length === 0) { body.innerHTML = ""; return; }
+  body.innerHTML = ajustesHonorarioPJ.map(function (a) {
+    return '<div class="timeline-item">' +
+      '<div class="timeline-data">' + formatDateBR(a.dataAjuste) + '</div>' +
+      '<div class="timeline-corpo"><strong>' + (a.cargoNovo ? 'Promoção / ajuste' : 'Ajuste de honorário') + '</strong>' +
+      (a.valorNovo ? '<span>Honorário: ' + formataMoeda(a.valorAnterior || 0) + ' → ' + formataMoeda(a.valorNovo) + '</span>' : '') +
+      (a.cargoNovo ? '<span>Cargo/função: ' + a.cargoNovo + '</span>' : '') +
+      (a.motivo ? '<span>' + a.motivo + '</span>' : '') +
+      '<small style="color:var(--ink-faint);">registrado por ' + (a.criadoPorNome || '—') + '</small>' +
+      '</div></div>';
+  }).join("");
 }
 el("ajusteHonorarioForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -1424,6 +1423,7 @@ function renderPJ() {
       '<td>' + (pj.dataTerminoRenovacao ? formatDateBR(pj.dataTerminoRenovacao) : '<small style="color:var(--ink-faint);">Renovação automática</small>') + '</td>' +
       '<td><small style="color:var(--ink-faint);">' + (pj.atualizadoPorNome || pj.criadoPorNome || '—') + '</small></td>' +
       '<td><div class="row-actions">' +
+        '<button class="btn-icon" data-action="ficha" data-id="' + pj.id + '" title="Ver histórico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3.5 2M20 12a8 8 0 1 1-3-6.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4v4h-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
         '<button class="btn-icon" data-action="editar" data-id="' + pj.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
         '<button class="btn-icon danger" data-action="excluir" data-id="' + pj.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '</div></td>';
