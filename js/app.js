@@ -754,13 +754,13 @@ function limparFormularioEmp() {
 
 // ------------------------- Ajuste salarial (histórico) -------------------------
 function carregarAjustesSalariais(colaboradorId) {
-  el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="5" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
+  el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="6" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
   listarAjustesSalariais(colaboradorId).then(function (lista) {
     ajustesSalariais = lista;
     renderAjustesSalariais();
   }).catch(function (err) {
     console.error(err);
-    el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="5" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
+    el("ajustesSalariaisBody").innerHTML = '<tr><td colspan="6" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
   });
 }
 function renderAjustesSalariais() {
@@ -771,8 +771,9 @@ function renderAjustesSalariais() {
     var tr = document.createElement("tr");
     tr.innerHTML =
       '<td>' + formatDateBR(a.dataAjuste) + '</td>' +
-      '<td>' + formataMoeda(a.valorAnterior || 0) + '</td>' +
-      '<td>' + formataMoeda(a.valorNovo || 0) + '</td>' +
+      '<td>' + (a.valorNovo ? formataMoeda(a.valorAnterior || 0) : '—') + '</td>' +
+      '<td>' + (a.valorNovo ? formataMoeda(a.valorNovo) : '—') + '</td>' +
+      '<td>' + (a.cargoNovo || '—') + '</td>' +
       '<td>' + (a.motivo || '—') + '</td>' +
       '<td><small style="color:var(--ink-faint);">' + (a.criadoPorNome || '—') + '</small></td>';
     body.appendChild(tr);
@@ -784,27 +785,35 @@ el("ajusteSalarialForm").addEventListener("submit", function (e) {
   var colaborador = getColaborador(editandoEmpId);
   if (!colaborador) return;
   var dataAjuste = el("ajusteSalarialData").value;
-  var valorNovo = moedaParaNumero(el("ajusteSalarialValor").value);
+  var valorNovo = moedaParaNumero(el("ajusteSalarialValor").value) || null;
+  var cargoNovo = el("ajusteSalarialCargo").value.trim();
   var motivo = el("ajusteSalarialMotivo").value.trim();
   if (!dataAjuste) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe a data do ajuste."; return; }
-  if (!valorNovo || valorNovo <= 0) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Informe o novo salário."; return; }
+  if (!valorNovo && !cargoNovo) { el("ajusteSalarialFormError").hidden = false; el("ajusteSalarialFormError").textContent = "Preencha o novo salário e/ou o novo cargo."; return; }
   el("ajusteSalarialFormError").hidden = true;
 
   var registro = {
     colaboradorId: editandoEmpId,
     colaboradorNome: colaborador.nome,
     dataAjuste: dataAjuste,
-    valorAnterior: colaborador.salarioBase || 0,
+    valorAnterior: valorNovo ? (colaborador.salarioBase || 0) : null,
     valorNovo: valorNovo,
+    cargoAnterior: cargoNovo ? (colaborador.cargo || null) : null,
+    cargoNovo: cargoNovo || null,
     motivo: motivo,
   };
+  var dadosColaborador = { id: editandoEmpId };
+  if (valorNovo) dadosColaborador.salarioBase = valorNovo;
+  if (cargoNovo) dadosColaborador.cargo = cargoNovo;
+
   setSync("syncing");
   salvarAjusteSalarial(registro)
-    .then(function () { return salvarColaborador({ id: editandoEmpId, salarioBase: valorNovo }); })
+    .then(function () { return salvarColaborador(dadosColaborador); })
     .then(function () {
-      setSync("ok"); showToast("Ajuste salarial registrado.");
+      setSync("ok"); showToast(cargoNovo ? "Promoção/ajuste registrado." : "Ajuste salarial registrado.");
       el("ajusteSalarialForm").reset();
-      el("empSalario").value = numeroParaMoeda(valorNovo);
+      if (valorNovo) el("empSalario").value = numeroParaMoeda(valorNovo);
+      if (cargoNovo) el("empCargo").value = cargoNovo;
       return carregarTudo(false);
     })
     .then(function () { carregarAjustesSalariais(editandoEmpId); })
@@ -907,7 +916,7 @@ function renderAdminList() {
     var row = document.createElement("div");
     row.className = "emp-admin-row";
     row.innerHTML =
-      '<div class="emp-admin-info"><strong>' + c.nome + '</strong><span>' + (c.cargo ? c.cargo + ' · ' : '') + 'admitido em ' + (c.dataAdmissao ? formatDateBR(c.dataAdmissao) : '—') + ' · ' + c.entrada + '–' + c.saida + ' · jornada ' + minutesToHHMM(jornadaMinutos(c)) + ' · ' + diasResumo(c.dias) + (c.salarioBase ? ' · R$ ' + Number(c.salarioBase).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : '') + '<br><small style="color:var(--ink-faint);">última edição por ' + (c.atualizadoPorNome || c.criadoPorNome || '—') + '</small></span></div>' +
+      '<div class="emp-admin-info"><button type="button" class="link-nome" data-action="ficha" data-id="' + c.id + '">' + c.nome + '</button><span>' + (c.cargo ? c.cargo + ' · ' : '') + 'admitido em ' + (c.dataAdmissao ? formatDateBR(c.dataAdmissao) : '—') + ' · ' + c.entrada + '–' + c.saida + ' · jornada ' + minutesToHHMM(jornadaMinutos(c)) + ' · ' + diasResumo(c.dias) + (c.salarioBase ? ' · R$ ' + Number(c.salarioBase).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : '') + '<br><small style="color:var(--ink-faint);">última edição por ' + (c.atualizadoPorNome || c.criadoPorNome || '—') + '</small></span></div>' +
       '<div class="emp-admin-actions">' +
         '<button class="btn-icon" data-action="editar" data-id="' + c.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
         '<button class="btn-icon danger" data-action="excluir" data-id="' + c.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
@@ -921,6 +930,7 @@ el("empAdminList").addEventListener("click", function (e) {
   var id = btn.dataset.id;
   if (btn.dataset.action === "editar") editarFuncionario(id);
   if (btn.dataset.action === "excluir") excluirFuncionarioUI(id);
+  if (btn.dataset.action === "ficha") abrirFicha("clt", id);
 });
 
 // ==========================================================================
@@ -1287,13 +1297,13 @@ function limparFormularioPj() {
 
 // ------------------------- Ajuste de honorário PJ (histórico) -------------------------
 function carregarAjustesHonorarioPJ(prestadorId) {
-  el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="5" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
+  el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="6" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>';
   listarAjustesHonorarioPJ(prestadorId).then(function (lista) {
     ajustesHonorarioPJ = lista;
     renderAjustesHonorarioPJ();
   }).catch(function (err) {
     console.error(err);
-    el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="5" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
+    el("ajustesHonorarioBody").innerHTML = '<tr><td colspan="6" class="empty-state">Não foi possível carregar: ' + (err && err.message || '') + '</td></tr>';
   });
 }
 function renderAjustesHonorarioPJ() {
@@ -1304,8 +1314,9 @@ function renderAjustesHonorarioPJ() {
     var tr = document.createElement("tr");
     tr.innerHTML =
       '<td>' + formatDateBR(a.dataAjuste) + '</td>' +
-      '<td>' + formataMoeda(a.valorAnterior || 0) + '</td>' +
-      '<td>' + formataMoeda(a.valorNovo || 0) + '</td>' +
+      '<td>' + (a.valorNovo ? formataMoeda(a.valorAnterior || 0) : '—') + '</td>' +
+      '<td>' + (a.valorNovo ? formataMoeda(a.valorNovo) : '—') + '</td>' +
+      '<td>' + (a.cargoNovo || '—') + '</td>' +
       '<td>' + (a.motivo || '—') + '</td>' +
       '<td><small style="color:var(--ink-faint);">' + (a.criadoPorNome || '—') + '</small></td>';
     body.appendChild(tr);
@@ -1317,26 +1328,34 @@ el("ajusteHonorarioForm").addEventListener("submit", function (e) {
   var pj = prestadoresPJ.filter(function (p) { return p.id === editandoPjId; })[0];
   if (!pj) return;
   var dataAjuste = el("ajusteHonorarioData").value;
-  var valorNovo = moedaParaNumero(el("ajusteHonorarioValor").value);
+  var valorNovo = moedaParaNumero(el("ajusteHonorarioValor").value) || null;
+  var cargoNovo = el("ajusteHonorarioCargo").value.trim();
   var motivo = el("ajusteHonorarioMotivo").value.trim();
   if (!dataAjuste) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe a data do ajuste."; return; }
-  if (!valorNovo || valorNovo <= 0) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Informe o novo honorário."; return; }
+  if (!valorNovo && !cargoNovo) { el("ajusteHonorarioFormError").hidden = false; el("ajusteHonorarioFormError").textContent = "Preencha o novo honorário e/ou o novo cargo/função."; return; }
   el("ajusteHonorarioFormError").hidden = true;
 
   var registro = {
     prestadorId: editandoPjId,
     prestadorNome: pj.nomeRazaoSocial,
     dataAjuste: dataAjuste,
-    valorAnterior: pj.valorHonorarioMensal || 0,
+    valorAnterior: valorNovo ? (pj.valorHonorarioMensal || 0) : null,
     valorNovo: valorNovo,
+    cargoAnterior: cargoNovo ? (pj.cargoFuncao || null) : null,
+    cargoNovo: cargoNovo || null,
     motivo: motivo,
   };
+  var dadosPj = { id: editandoPjId };
+  if (valorNovo) dadosPj.valorHonorarioMensal = valorNovo;
+  if (cargoNovo) dadosPj.cargoFuncao = cargoNovo;
+
   salvarAjusteHonorarioPJ(registro)
-    .then(function () { return salvarPrestadorPJ({ id: editandoPjId, valorHonorarioMensal: valorNovo }); })
+    .then(function () { return salvarPrestadorPJ(dadosPj); })
     .then(function () {
-      showToast("Ajuste de honorário registrado.");
+      showToast(cargoNovo ? "Promoção/ajuste registrado." : "Ajuste de honorário registrado.");
       el("ajusteHonorarioForm").reset();
-      el("pjValor").value = numeroParaMoeda(valorNovo);
+      if (valorNovo) el("pjValor").value = numeroParaMoeda(valorNovo);
+      if (cargoNovo) el("pjCargo").value = cargoNovo;
       return carregarPJ();
     })
     .then(function () { carregarAjustesHonorarioPJ(editandoPjId); })
@@ -1396,7 +1415,7 @@ function renderPJ() {
   prestadoresPJ.forEach(function (pj) {
     var tr = document.createElement("tr");
     tr.innerHTML =
-      '<td><strong>' + pj.nomeRazaoSocial + '</strong> <span class="badge-pj">PJ</span></td>' +
+      '<td><button type="button" class="link-nome" data-action="ficha" data-id="' + pj.id + '"><strong>' + pj.nomeRazaoSocial + '</strong></button> <span class="badge-pj">PJ</span></td>' +
       '<td>' + (pj.cnpj || '—') + '</td>' +
       '<td>' + pj.cargoFuncao + '</td>' +
       '<td>' + (pj.dataAdmissao ? formatDateBR(pj.dataAdmissao) : '—') + '</td>' +
@@ -1417,7 +1436,104 @@ el("pjBody").addEventListener("click", function (e) {
   var id = btn.dataset.id;
   if (btn.dataset.action === "editar") editarPj(id);
   if (btn.dataset.action === "excluir") excluirPjUI(id);
+  if (btn.dataset.action === "ficha") abrirFicha("pj", id);
 });
+
+// ==========================================================================
+// FICHA CADASTRAL (linha do tempo — Colaboradores CLT e Prestadores PJ)
+// ==========================================================================
+var fichaAtual = null; // { tipo: "clt" | "pj", id }
+
+function abrirFicha(tipo, id) {
+  var entidade = tipo === "clt" ? getColaborador(id) : prestadoresPJ.filter(function (p) { return p.id === id; })[0];
+  if (!entidade) return;
+  fichaAtual = { tipo: tipo, id: id };
+  var nome = tipo === "clt" ? entidade.nome : entidade.nomeRazaoSocial;
+  var cargo = tipo === "clt" ? entidade.cargo : entidade.cargoFuncao;
+  el("fichaNome").textContent = nome;
+  el("fichaCargoAtual").textContent = (cargo || "—") + " · admitido em " + (entidade.dataAdmissao ? formatDateBR(entidade.dataAdmissao) : "—");
+  el("fichaTipoBadge").hidden = tipo !== "pj";
+  el("fichaModal").classList.remove("hidden");
+  el("fichaTimeline").innerHTML = '<div class="empty-dashboard"><span class="spinner"></span> Carregando histórico...</div>';
+  carregarFichaTimeline(tipo, id, entidade, cargo);
+}
+function fecharFicha() {
+  el("fichaModal").classList.add("hidden");
+  fichaAtual = null;
+}
+el("fichaFechar").addEventListener("click", fecharFicha);
+el("fichaModal").addEventListener("click", function (e) { if (e.target.id === "fichaModal") fecharFicha(); });
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape" && fichaAtual) fecharFicha();
+});
+
+function carregarFichaTimeline(tipo, id, entidade, cargoAtual) {
+  var promessa = tipo === "clt"
+    ? Promise.all([listarAjustesSalariais(id), listarFeriasGozos(id), listarRescisoes(id)])
+    : Promise.all([listarAjustesHonorarioPJ(id), listarPjPeriodos(id), listarDistratosPJ(id)]);
+
+  promessa.then(function (results) {
+    var eventos = [];
+    var valorAtual = tipo === "clt" ? entidade.salarioBase : entidade.valorHonorarioMensal;
+    eventos.push({
+      data: entidade.dataAdmissao,
+      ordem: 0,
+      titulo: "Admissão",
+      detalhe: (cargoAtual || "—") + (valorAtual ? " · " + formataMoeda(valorAtual) : ""),
+    });
+
+    if (tipo === "clt") {
+      results[0].forEach(function (a) {
+        var partes = [];
+        if (a.cargoNovo) partes.push("Novo cargo: " + a.cargoNovo);
+        if (a.valorNovo) partes.push("Novo salário: " + formataMoeda(a.valorNovo) + (a.valorAnterior ? " (era " + formataMoeda(a.valorAnterior) + ")" : ""));
+        if (a.motivo) partes.push(a.motivo);
+        eventos.push({ data: a.dataAjuste, ordem: 1, titulo: a.cargoNovo ? "Promoção / ajuste" : "Ajuste salarial", detalhe: partes.join(" · "), autor: a.criadoPorNome });
+      });
+      results[1].forEach(function (g) {
+        eventos.push({ data: g.dataInicio, ordem: 1, titulo: "Férias", detalhe: (g.dias ? g.dias + " dia(s)" : "") + (g.dataFim ? " — até " + formatDateBR(g.dataFim) : ""), autor: g.criadoPorNome });
+      });
+      results[2].forEach(function (r) {
+        eventos.push({ data: r.dataDemissao, ordem: 2, titulo: "Rescisão (" + (TIPOS_RESCISAO[r.tipoRescisao] || r.tipoRescisao) + ")", detalhe: "Total estimado: " + formataMoeda(r.resultado ? r.resultado.total : 0), autor: r.criadoPorNome });
+      });
+    } else {
+      results[0].forEach(function (a) {
+        var partes = [];
+        if (a.cargoNovo) partes.push("Novo cargo/função: " + a.cargoNovo);
+        if (a.valorNovo) partes.push("Novo honorário: " + formataMoeda(a.valorNovo) + (a.valorAnterior ? " (era " + formataMoeda(a.valorAnterior) + ")" : ""));
+        if (a.motivo) partes.push(a.motivo);
+        eventos.push({ data: a.dataAjuste, ordem: 1, titulo: a.cargoNovo ? "Promoção / ajuste" : "Ajuste de honorário", detalhe: partes.join(" · "), autor: a.criadoPorNome });
+      });
+      results[1].forEach(function (p) {
+        eventos.push({ data: p.dataInicio, ordem: 1, titulo: "Período sem prestação de serviço", detalhe: (p.dataFim ? "até " + formatDateBR(p.dataFim) : "") + (p.observacao ? " · " + p.observacao : ""), autor: p.criadoPorNome });
+      });
+      results[2].forEach(function (d) {
+        eventos.push({ data: d.dataEncerramento, ordem: 2, titulo: "Distrato (" + (MOTIVOS_DISTRATO_PJ[d.motivo] || d.motivo) + ")", detalhe: "Honorário proporcional: " + formataMoeda(d.honorarioProporcional), autor: d.criadoPorNome });
+      });
+    }
+
+    eventos.sort(function (a, b) {
+      if (a.data !== b.data) return a.data < b.data ? 1 : -1; // mais recente primeiro
+      return b.ordem - a.ordem;
+    });
+    renderFichaTimeline(eventos);
+  }).catch(function (err) {
+    console.error(err);
+    el("fichaTimeline").innerHTML = '<p class="empty-dashboard">Não foi possível carregar o histórico: ' + (err && err.message || '') + '</p>';
+  });
+}
+
+function renderFichaTimeline(eventos) {
+  if (eventos.length === 0) { el("fichaTimeline").innerHTML = '<p class="empty-dashboard">Nenhum evento registrado ainda.</p>'; return; }
+  el("fichaTimeline").innerHTML = eventos.map(function (ev) {
+    return '<div class="timeline-item">' +
+      '<div class="timeline-data">' + (ev.data ? formatDateBR(ev.data) : '—') + '</div>' +
+      '<div class="timeline-corpo"><strong>' + ev.titulo + '</strong>' +
+      (ev.detalhe ? '<span>' + ev.detalhe + '</span>' : '') +
+      (ev.autor ? '<small style="color:var(--ink-faint);">registrado por ' + ev.autor + '</small>' : '') +
+      '</div></div>';
+  }).join("");
+}
 
 // ==========================================================================
 // USUÁRIOS (Super Admin apenas)

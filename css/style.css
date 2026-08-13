@@ -202,6 +202,19 @@ h1,h2,h3{ font-family: var(--font-display); color: var(--ink); margin:0; font-we
 .modal-box h3{ font-size:1.05rem; margin-bottom:8px; }
 .modal-box p{ color: var(--ink-soft); font-size:.87rem; margin:0 0 18px; }
 .modal-actions{ display:flex; justify-content:flex-end; gap:10px; }
+.modal-box-lg{ max-width:640px; border-top:4px solid var(--accent); position:relative; max-height:85vh; overflow-y:auto; }
+.ficha-fechar{ position:absolute; top:16px; right:16px; }
+.ficha-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding-right:36px; margin-bottom:18px; }
+.ficha-secao{ margin-top:18px; }
+.ficha-timeline{ display:flex; flex-direction:column; gap:2px; }
+.timeline-item{ display:flex; gap:16px; padding:12px 0; border-bottom:1px solid var(--border); }
+.timeline-item:last-child{ border-bottom:none; }
+.timeline-data{ flex:0 0 90px; font-size:.8rem; color:var(--ink-faint); font-weight:600; padding-top:1px; }
+.timeline-corpo{ display:flex; flex-direction:column; gap:2px; font-size:.87rem; }
+.timeline-corpo strong{ font-size:.9rem; }
+.timeline-corpo span{ color:var(--ink-soft); }
+.link-nome{ background:none; border:none; padding:0; margin:0; font:inherit; font-weight:inherit; color:inherit; cursor:pointer; text-decoration:underline; text-decoration-color:var(--border); text-underline-offset:2px; }
+.link-nome:hover{ text-decoration-color:currentColor; }
 .weekday-picker{ display:flex; gap:6px; flex-wrap:wrap; }
 .weekday-chip{ display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; border:1.5px solid var(--border); background: var(--surface-2); font-size:.7rem; font-weight:700; color: var(--ink-soft); cursor:pointer; user-select:none; transition: all .15s ease; }
 .weekday-chip input{ display:none; }
