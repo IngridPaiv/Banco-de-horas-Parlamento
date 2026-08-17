@@ -19,6 +19,7 @@ var prestadoresPJ = [];
 var pjPeriodos = [];
 var ajustesSalariais = []; // histórico de mudanças de salário do CLT (colaborador em edição)
 var ajustesHonorarioPJ = []; // histórico de mudanças de honorário do PJ (prestador em edição)
+var rescisoesList = []; // histórico completo de rescisões CLT (aba Rescisão)
 var listaUsuarios = [];
 
 var editandoRegistroId = null;
@@ -200,9 +201,25 @@ function aplicarRBACNaInterface() {
   el("feriasFiltroWrap").style.display = soLeituraPropria ? "none" : "flex";
   el("feriasGozoWrap").style.display = ehAdminOuSuperAdmin() ? "block" : "none";
 
+  // "Lançar ajuste" (crédito/débito no banco de horas) só pra quem tem
+  // permissão de escrever em ajustes (Admin/RH e Super Admin) — funcionário
+  // só registra o próprio ponto, então nem o botão de alternar nem a dica
+  // de débito aparecem pra ele.
+  el("btnModoAjuste").hidden = !ehAdminOuSuperAdmin();
+  el("ajusteDicaBox").hidden = !ehAdminOuSuperAdmin();
+  if (!ehAdminOuSuperAdmin()) setModoRegistroAjuste("ponto");
+
   // O alternador CLT/PJ só existe pra quem enxerga dados de PJ (Super Admin).
   el("feriasRegimeToggle").hidden = !ehSuperAdmin();
   el("rescisaoRegimeToggle").hidden = !ehSuperAdmin();
+
+  // Colaboradores e Rescisão: Admin/RH enxerga tudo (lista completa +
+  // histórico), mas só Super Admin pode cadastrar/editar/excluir um
+  // colaborador ou calcular/registrar uma rescisão — por isso o
+  // formulário de cadastro e o de cálculo ficam escondidos pra Admin/RH,
+  // só a visualização fica disponível.
+  el("empForm").style.display = ehSuperAdmin() ? "" : "none";
+  el("rescisaoForm").style.display = ehSuperAdmin() ? "" : "none";
 }
 
 // ==========================================================================
@@ -266,7 +283,6 @@ function renderTudo() {
   renderHistorico();
   renderRelatorio();
   renderAdminList();
-  renderAjustes();
   renderFerias();
   popularAnos();
 }
@@ -282,12 +298,12 @@ function getColaborador(id) {
 function irParaView(viewId) {
   document.querySelectorAll(".view").forEach(function (v) { v.classList.toggle("is-active", v.id === viewId); });
   document.querySelectorAll(".tab-btn").forEach(function (t) { t.classList.toggle("is-active", t.dataset.view === viewId); });
-  if (viewId === "historico") renderHistorico();
+  if (viewId === "registro") renderHistorico();
   if (viewId === "dashboard") renderDashboard();
   if (viewId === "relatorio") renderRelatorio();
   if (viewId === "colaboradores") renderAdminList();
-  if (viewId === "ajustes") renderAjustes();
   if (viewId === "ferias") renderFerias();
+  if (viewId === "rescisao") carregarRescisoes();
   if (viewId === "pj" && ehSuperAdmin()) carregarPJ();
   if (viewId === "usuarios" && ehSuperAdmin()) carregarUsuarios();
 }
@@ -505,7 +521,7 @@ function limparFormularioRegistro() {
   el("pontoForm").reset();
   el("registroId").value = "";
   editandoRegistroId = null;
-  el("formTitle").textContent = "Registrar ponto";
+  el("formTitle").textContent = "Ponto e Ajustes";
   el("cancelEdit").hidden = true;
   el("previewBox").hidden = true;
   el("formError").hidden = true;
@@ -524,6 +540,7 @@ el("pontoForm").addEventListener("submit", function (e) {
     saidaAlmoco: el("saidaAlmoco").value,
     retornoAlmoco: el("retornoAlmoco").value,
     saida: el("saida").value,
+    motivo: el("registroMotivo").value.trim(),
   };
   if (!reg.colaboradorId || !reg.data) { el("formError").hidden = false; el("formError").textContent = "Selecione o colaborador e a data do registro."; return; }
   var erro = validarHorarios(reg.entrada, reg.saidaAlmoco, reg.retornoAlmoco, reg.saida);
@@ -538,7 +555,7 @@ el("pontoForm").addEventListener("submit", function (e) {
     limparFormularioRegistro();
     return carregarTudo(false);
   }).then(function () {
-    irParaView("historico");
+    irParaView("registro");
   }).catch(function (err) {
     console.error(err);
     setSync("error");
@@ -548,6 +565,7 @@ el("pontoForm").addEventListener("submit", function (e) {
 function editarRegistro(id) {
   var reg = registros.filter(function (r) { return r.id === id; })[0];
   if (!reg) return;
+  setModoRegistroAjuste("ponto");
   editandoRegistroId = id;
   el("registroId").value = id;
   if (ehAdminOuSuperAdmin()) el("funcionario").value = reg.colaboradorId;
@@ -556,6 +574,7 @@ function editarRegistro(id) {
   el("saidaAlmoco").value = reg.saidaAlmoco;
   el("retornoAlmoco").value = reg.retornoAlmoco;
   el("saida").value = reg.saida;
+  el("registroMotivo").value = reg.motivo || "";
   var c = getColaborador(reg.colaboradorId);
   el("formTitle").textContent = "Editando registro — " + (c ? c.nome : "?") + " (" + formatDateBR(reg.data) + ")";
   el("cancelEdit").hidden = false;
@@ -614,31 +633,67 @@ function aplicarFiltros(lista, filtros) {
     return true;
   });
 }
+// Histórico unificado: pontos e ajustes de banco de horas juntos numa única
+// lista, do mais recente pro mais antigo, cada linha marcada com um selo
+// (Ponto / Crédito / Débito) pra diferenciar de cara.
 function renderHistorico() {
   var filtros = obterFiltros("historico");
-  var lista = aplicarFiltros(registros, filtros).slice().sort(function (a, b) { return a.data < b.data ? 1 : -1; });
+  var itensPonto = aplicarFiltros(registros, filtros).map(function (reg) {
+    return { tipo: "ponto", data: reg.data, colaboradorId: reg.colaboradorId, registro: reg };
+  });
+  var itensAjuste = aplicarFiltros(ajustes, filtros).map(function (a) {
+    return { tipo: "ajuste", data: a.data, colaboradorId: a.colaboradorId, ajuste: a };
+  });
+  var lista = itensPonto.concat(itensAjuste).sort(function (a, b) { return a.data < b.data ? 1 : a.data > b.data ? -1 : 0; });
+
   var body = el("historicoBody");
   body.innerHTML = "";
   el("historicoVazio").hidden = lista.length !== 0;
-  lista.forEach(function (reg) {
-    var colaborador = getColaborador(reg.colaboradorId);
-    var calc = calcularRegistro(reg, colaborador);
-    var tr = document.createElement("tr");
-    var saldoClasse = calc.saldo > 0 ? "pos" : calc.saldo < 0 ? "neg" : "zero";
+  lista.forEach(function (item) {
+    var colaborador = getColaborador(item.colaboradorId);
     var nomeExibicao = colaborador ? colaborador.nome : "(colaborador removido)";
-    var acoes = ehAdminOuSuperAdmin()
-      ? '<div class="row-actions">' +
-        '<button class="btn-icon" data-action="editar" data-id="' + reg.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
-        '<button class="btn-icon danger" data-action="excluir" data-id="' + reg.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-        '</div>' : '';
-    tr.innerHTML =
-      '<td>' + formatDateBR(reg.data) + (calc.diaUtil ? "" : ' <small style="color:var(--ink-faint)">(fora da jornada)</small>') + '</td>' +
-      '<td>' + nomeExibicao + '</td>' +
-      '<td>' + reg.entrada + '</td><td>' + reg.saidaAlmoco + '</td><td>' + reg.retornoAlmoco + '</td><td>' + reg.saida + '</td>' +
-      '<td>' + minutesToHHMM(calc.trabalhadas) + '</td>' +
-      '<td><span class="badge-saldo ' + saldoClasse + '">' + minutesToSignedHHMM(calc.saldo) + '</span></td>' +
-      '<td><small style="color:var(--ink-faint);">' + (reg.atualizadoPorNome || reg.criadoPorNome || '—') + '</small></td>' +
-      '<td>' + acoes + '</td>';
+    var tr = document.createElement("tr");
+
+    if (item.tipo === "ponto") {
+      var reg = item.registro;
+      var calc = calcularRegistro(reg, colaborador);
+      var saldoClasse = calc.saldo > 0 ? "pos" : calc.saldo < 0 ? "neg" : "zero";
+      var detalhe = reg.entrada + '–' + reg.saidaAlmoco + ' · ' + reg.retornoAlmoco + '–' + reg.saida +
+        ' (' + minutesToHHMM(calc.trabalhadas) + ' trabalhadas)' +
+        (calc.diaUtil ? "" : ' <small style="color:var(--ink-faint)">(fora da jornada)</small>') +
+        (reg.motivo ? '<br><small style="color:var(--ink-faint);">' + reg.motivo + '</small>' : '');
+      var acoes = ehAdminOuSuperAdmin()
+        ? '<div class="row-actions">' +
+          '<button class="btn-icon" data-tipo="ponto" data-action="editar" data-id="' + reg.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
+          '<button class="btn-icon danger" data-tipo="ponto" data-action="excluir" data-id="' + reg.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+          '</div>' : '';
+      tr.innerHTML =
+        '<td>' + formatDateBR(reg.data) + '</td>' +
+        '<td>' + nomeExibicao + '</td>' +
+        '<td><span class="badge-saldo zero">Ponto</span></td>' +
+        '<td style="white-space:normal;max-width:320px;">' + detalhe + '</td>' +
+        '<td><span class="badge-saldo ' + saldoClasse + '">' + minutesToSignedHHMM(calc.saldo) + '</span></td>' +
+        '<td><small style="color:var(--ink-faint);">' + (reg.atualizadoPorNome || reg.criadoPorNome || '—') + '</small></td>' +
+        '<td>' + acoes + '</td>';
+    } else {
+      var a = item.ajuste;
+      var tipoClasse = a.tipo === "credito" ? "pos" : "neg";
+      var tipoLabel = a.tipo === "credito" ? "Crédito" : "Débito";
+      var sinal = a.tipo === "credito" ? "+" : "-";
+      var acoes = ehAdminOuSuperAdmin()
+        ? '<div class="row-actions">' +
+          '<button class="btn-icon" data-tipo="ajuste" data-action="editar" data-id="' + a.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
+          '<button class="btn-icon danger" data-tipo="ajuste" data-action="excluir" data-id="' + a.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+          '</div>' : '';
+      tr.innerHTML =
+        '<td>' + formatDateBR(a.data) + '</td>' +
+        '<td>' + nomeExibicao + '</td>' +
+        '<td><span class="badge-saldo ' + tipoClasse + '">' + tipoLabel + '</span></td>' +
+        '<td style="white-space:normal;max-width:320px;">' + (a.motivo || '') + '</td>' +
+        '<td><span class="badge-saldo ' + tipoClasse + '">' + sinal + minutesToHHMM(a.minutos) + '</span></td>' +
+        '<td><small style="color:var(--ink-faint);">' + (a.atualizadoPorNome || a.criadoPorNome || '—') + '</small></td>' +
+        '<td>' + acoes + '</td>';
+    }
     body.appendChild(tr);
   });
 }
@@ -646,8 +701,13 @@ el("historicoBody").addEventListener("click", function (e) {
   var btn = e.target.closest("button[data-action]");
   if (!btn) return;
   var id = btn.dataset.id;
-  if (btn.dataset.action === "editar") editarRegistro(id);
-  if (btn.dataset.action === "excluir") excluirRegistroUI(id);
+  if (btn.dataset.tipo === "ajuste") {
+    if (btn.dataset.action === "editar") editarAjuste(id);
+    if (btn.dataset.action === "excluir") excluirAjusteUI(id);
+  } else {
+    if (btn.dataset.action === "editar") editarRegistro(id);
+    if (btn.dataset.action === "excluir") excluirRegistroUI(id);
+  }
 });
 [el("filtroFuncionario"), el("filtroMes"), el("filtroAno")].forEach(function (s) { s.addEventListener("change", renderHistorico); });
 el("limparFiltros").addEventListener("click", function () { el("filtroFuncionario").value = ""; el("filtroMes").value = ""; el("filtroAno").value = ""; renderHistorico(); });
@@ -696,6 +756,17 @@ el("imprimirRelatorio").addEventListener("click", function () { renderRelatorio(
 // ==========================================================================
 // AJUSTES (admin/super_admin)
 // ==========================================================================
+// Alterna qual formulário aparece na aba "Ponto e Ajustes" — só um dos dois
+// fica visível por vez, pra não poluir a tela.
+function setModoRegistroAjuste(modo) {
+  el("registroAjusteToggle").querySelectorAll(".regime-btn").forEach(function (b) { b.classList.toggle("is-active", b.dataset.modo === modo); });
+  el("pontoForm").hidden = modo !== "ponto";
+  el("ajusteForm").hidden = modo !== "ajuste";
+}
+el("registroAjusteToggle").querySelectorAll(".regime-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () { setModoRegistroAjuste(btn.dataset.modo); });
+});
+
 function limparFormularioAjuste() {
   el("ajusteForm").reset();
   el("ajusteId").value = "";
@@ -727,6 +798,7 @@ el("ajusteForm").addEventListener("submit", function (e) {
 function editarAjuste(id) {
   var a = ajustes.filter(function (x) { return x.id === id; })[0];
   if (!a) return;
+  setModoRegistroAjuste("ajuste");
   editandoAjusteId = id;
   el("ajusteId").value = id;
   el("ajFuncionario").value = a.colaboradorId;
@@ -745,38 +817,6 @@ function excluirAjusteUI(id) {
       .catch(function (err) { console.error(err); setSync("error"); showToast("Não foi possível excluir."); });
   });
 }
-function renderAjustes() {
-  var lista = ajustes.slice().sort(function (a, b) { return a.data < b.data ? 1 : -1; });
-  var body = el("ajustesBody");
-  body.innerHTML = "";
-  el("ajustesVazio").hidden = lista.length !== 0;
-  lista.forEach(function (a) {
-    var c = getColaborador(a.colaboradorId);
-    var tr = document.createElement("tr");
-    var tipoClasse = a.tipo === "credito" ? "pos" : "neg";
-    var tipoLabel = a.tipo === "credito" ? "Crédito" : "Débito";
-    var sinal = a.tipo === "credito" ? "+" : "-";
-    tr.innerHTML =
-      '<td>' + formatDateBR(a.data) + '</td>' +
-      '<td>' + (c ? c.nome : "(colaborador removido)") + '</td>' +
-      '<td><span class="badge-saldo ' + tipoClasse + '">' + tipoLabel + '</span></td>' +
-      '<td>' + sinal + minutesToHHMM(a.minutos) + '</td>' +
-      '<td style="white-space:normal;max-width:260px;">' + a.motivo + '</td>' +
-      '<td><small style="color:var(--ink-faint);">' + (a.atualizadoPorNome || a.criadoPorNome || '—') + '</small></td>' +
-      '<td><div class="row-actions">' +
-        '<button class="btn-icon" data-action="editar" data-id="' + a.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
-        '<button class="btn-icon danger" data-action="excluir" data-id="' + a.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-      '</div></td>';
-    body.appendChild(tr);
-  });
-}
-el("ajustesBody").addEventListener("click", function (e) {
-  var btn = e.target.closest("button[data-action]");
-  if (!btn) return;
-  var id = btn.dataset.id;
-  if (btn.dataset.action === "editar") editarAjuste(id);
-  if (btn.dataset.action === "excluir") excluirAjusteUI(id);
-});
 
 // ==========================================================================
 // COLABORADORES (admin/super_admin)
@@ -1012,8 +1052,8 @@ function renderAdminList() {
       '<div class="emp-admin-info"><button type="button" class="link-nome" data-action="ficha" data-id="' + c.id + '">' + c.nome + '</button><span>' + (c.cargo ? c.cargo + ' · ' : '') + 'admitido em ' + (c.dataAdmissao ? formatDateBR(c.dataAdmissao) : '—') + ' · ' + c.entrada + '–' + c.saida + ' · jornada ' + minutesToHHMM(jornadaMinutos(c)) + ' · ' + diasResumo(c.dias) + (c.salarioBase ? ' · R$ ' + Number(c.salarioBase).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : '') + '<br><small style="color:var(--ink-faint);">última edição por ' + (c.atualizadoPorNome || c.criadoPorNome || '—') + '</small></span></div>' +
       '<div class="emp-admin-actions">' +
         '<button class="btn-icon" data-action="ficha" data-id="' + c.id + '" title="Ver histórico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3.5 2M20 12a8 8 0 1 1-3-6.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 4v4h-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-        '<button class="btn-icon" data-action="editar" data-id="' + c.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' +
-        '<button class="btn-icon danger" data-action="excluir" data-id="' + c.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+        (ehSuperAdmin() ? '<button class="btn-icon" data-action="editar" data-id="' + c.id + '" title="Editar"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>' : '') +
+        (ehSuperAdmin() ? '<button class="btn-icon danger" data-action="excluir" data-id="' + c.id + '" title="Excluir"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') +
       '</div>';
     wrap.appendChild(row);
   });
@@ -1209,6 +1249,33 @@ function renderResultadoRescisao(r, colaborador) {
       '<ul class="rescisao-obs">' + obsHtml + '</ul>' +
       '<div class="disclaimer-box">Valor de apoio. Não inclui FGTS (8% + multa de 40%), INSS/IRRF, nem convenções coletivas específicas. Confira com um(a) contador(a) antes de qualquer pagamento.</div>' +
     '</div>';
+}
+
+// Histórico de rescisões CLT — visível pra Super Admin e Admin/RH (só quem
+// calcula/registra é Super Admin, mas a lista completa fica aberta pros dois
+// consultarem quem já foi desligado e por qual estimativa).
+function carregarRescisoes() {
+  listarRescisoes().then(function (lista) {
+    rescisoesList = lista;
+    renderRescisoesList();
+  }).catch(function (err) {
+    console.error(err);
+    el("rescisoesBody").innerHTML = "";
+    el("rescisoesVazio").hidden = false;
+    el("rescisoesVazio").textContent = "Não foi possível carregar o histórico: " + (err && err.message || "");
+  });
+}
+function renderRescisoesList() {
+  var body = el("rescisoesBody");
+  if (!body) return;
+  el("rescisoesVazio").hidden = rescisoesList.length !== 0;
+  el("rescisoesVazio").textContent = "Nenhuma rescisão registrada ainda.";
+  body.innerHTML = rescisoesList.map(function (r) {
+    var c = getColaborador(r.colaboradorId);
+    var total = r.resultado && typeof r.resultado.total === "number" ? r.resultado.total : 0;
+    return "<tr><td>" + (c ? c.nome : "(colaborador removido)") + "</td><td>" + formatDateBR(r.dataDemissao) + "</td><td>" +
+      (TIPOS_RESCISAO[r.tipoRescisao] || r.tipoRescisao) + "</td><td>" + formataMoeda(total) + "</td><td>" + (r.criadoPorNome || "—") + "</td></tr>";
+  }).join("");
 }
 
 // ------------------------- Alternador CLT / PJ (Rescisão / Distrato) -------------------------
